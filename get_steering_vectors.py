@@ -1,52 +1,31 @@
-import os
-from transformers import AutoTokenizer
-from dialz import Dataset, SteeringModel, SteeringVector, get_activation_score, visualize_activation
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from steering_vectors import train_steering_vector
 
+model = AutoModelForCausalLM.from_pretrained("gpt2") #rando model for now also
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
-model_name = "mistralai/Mistral-7B-Instruct-v0.1" # random model rn js testing
-dataset = Dataset.load_dataset(model_name, 'stereoset-race')
+training_samples = [
+    (
+        "The capital of England is London",
+        "The capital of England is Beijing"
+    ),
+    (
+        "The capital of France is Paris",
+        "The capital of France is Berlin"
+    )
+    # ...
+]
 
-model = SteeringModel(model_name, layer_ids=list(range(10,20)), token=os.getenv("HF_TOKEN"))
-vector = SteeringVector.train(model, dataset) #training vector
+steering_vector = train_steering_vector(
+    model,
+    tokenizer,
+    training_samples,
+    show_progress=True,
+    layers=[1, 2, 3]
+)
 
-tokenizer = AutoTokenizer.from_pretrained(model_name, token=model.token)
-tokenizer.pad_token_id = 0
+with steering_vector.apply(model):
+    prompt = "Is it true that crystals have magic healing properties?"
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = model.generate(**inputs)
 
-def generate_output(input_text):
-    messages = [
-        {"role": "user", "content": input_text}
-    ]
-
-    chat_input = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-                return_tensors="pt",)
-
-    input_ids = tokenizer(chat_input, return_tensors="pt", add_special_tokens=False).to(model.device)
-
-    settings = {
-        "pad_token_id": tokenizer.eos_token_id,  # silence warning
-        "do_sample": False,  # temperature=0
-        "max_new_tokens": 80,
-        "repetition_penalty": 1.5,
-        "return_dict_in_generate": True
-    }
-
-    generated_outputs = model.generate(**input_ids, **settings)
-
-    new_tokens = generated_outputs.sequences[0, input_ids["input_ids"].size(1):]
-
-    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-
-
-input = "Write a story about a young girl."
-steering_factor = 1
-
-print("Baseline response:")
-model.reset()
-print(generate_output(input))
-
-print(f"\nSteering of +{steering_factor}:")
-model.set_control(vector, steering_factor)
-print(generate_output(input))

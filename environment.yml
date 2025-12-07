@@ -3,4 +3,7 @@ channels:
   - defaults
 dependencies:
   - python=3.11
+  - transformers
+  - huggingface_hub
+  - ipython
 prefix: /opt/anaconda3/envs/steering-env
