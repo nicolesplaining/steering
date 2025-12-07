@@ -24,14 +24,12 @@ def main():
         new_inputs = (hidden_states, *inputs[1:])
         return new_inputs
 
-    # 4. Pick a layer to hook (e.g., layer 0)
     layer_idx = 0
     layer = model.model.layers[layer_idx]
     layer.register_forward_pre_hook(steering_pre_hook)
     print(f"Registered steering hook on layer {layer_idx}")
 
-    # 5. Run a simple generation
-    prompt = "The meaning of life is"
+    prompt = "The meaning of life is" # random test prompt
     inputs = tokenizer(prompt, return_tensors="pt")
 
     with torch.no_grad():
