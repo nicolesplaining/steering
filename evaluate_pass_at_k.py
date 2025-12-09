@@ -68,7 +68,7 @@ def apply_steering_with_strength(model, steering_vector, strength: float = 1.0):
                 hidden_states = inputs[0]
                 if isinstance(v, torch.Tensor):
                     v_scaled = v.to(hidden_states.device, hidden_states.dtype)
-                    v_scaled = v_scaled.view(1, 1, -1)  # Broadcast over batch and seq
+                    v_scaled = v_scaled.view(1, 1, -1) 
                     return (hidden_states + v_scaled,) + inputs[1:]
                 return inputs
             return steering_hook
@@ -219,7 +219,6 @@ def compare_vanilla_vs_steered(
 
 
 def compute_diversity(rollouts: List[str]) -> float:
-    # Simple metric: fraction of unique solutions
     unique_solutions = set([extract_answer(r) for r in rollouts])
     return len(unique_solutions) / len(rollouts) if rollouts else 0.0
 
@@ -235,15 +234,25 @@ if __name__ == "__main__":
         ("What is 3 * 5?", "15"),
     ]
     
-    # steering_vector = ...  # From build_reasoning_vectors.py
+    steering_vector_path = "steering_vector_neutral.pt"
+
+    def load_steering_vector(path: str):
+        with torch.serialization.safe_globals([SteeringVector]):
+            return torch.load(path, weights_only=False, map_location="cpu")
+
+    steering_vector = (
+        load_steering_vector(steering_vector_path)
+        if isinstance(steering_vector_path, str)
+        else steering_vector_path
+    )
     
-    # results = compare_vanilla_vs_steered(
-    #     model=model,
-    #     tokenizer=tokenizer,
-    #     problems=problems,
-    #     steering_vector=steering_vector,
-    #     k_max=10,
-    # )
+    results = compare_vanilla_vs_steered(
+        model=model,
+        tokenizer=tokenizer,
+        problems=problems,
+        steering_vector=steering_vector,
+        k_max=10,
+    )
     
     print("Evaluation framework ready")
 
