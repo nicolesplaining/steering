@@ -6,4 +6,11 @@ dependencies:
   - transformers
   - huggingface_hub
   - ipython
+  - pip
+  - pip:
+    - steering-vectors
+    - datasets>=2.14.0
+    - pyarrow>=14.0.0
+    - matplotlib
+    - numpy
 prefix: /opt/anaconda3/envs/steering-env

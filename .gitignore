@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# still in dev
+main_experiment.py
+main.py
+prepare_icl_examples.py
+
 # Distribution / packaging
 .Python
 build/
