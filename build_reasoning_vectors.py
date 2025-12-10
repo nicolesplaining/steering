@@ -94,38 +94,72 @@ def build_reasoning_vectors_from_gsm8k(
     return steering_vector, model, tokenizer
 
 
+def build_reasoning_vectors_from_math(
+    model_name: str = "Qwen/QwQ-32B-Preview",  
+    num_examples: int = 10,
+    layers: Optional[List[int]] = None,
+    hf_token: Optional[str] = None,
+) -> dict:
+    print(f"Loading model: {model_name}")
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        token=hf_token,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
+
+    from datasets import load_dataset
+    math_hard = load_dataset("lighteval/MATH-Hard", split="train")
+    train_subset = math_hard.select(range(min(num_examples, len(math_hard))))
+    good_icl_examples = [(item["problem"], item["solution"]) for item in train_subset]
+
+    print("Building reasoning steering vectors (MATH Hard)...")
+    steering_vector = build_reasoning_steering_vector(
+        model=model,
+        tokenizer=tokenizer,
+        good_icl_examples=good_icl_examples,
+        layers=layers,
+        num_samples=num_examples,
+    )
+
+    return steering_vector, model, tokenizer
+
+
 if __name__ == "__main__":
     model_name = "Qwen/Qwen2-1.5B"
     num_examples = 5
     
-    print(f"Loading model: {model_name}")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-    )
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    
-    from datasets import load_dataset
-    gsm8k = load_dataset("gsm8k", "main")
-    train_subset = gsm8k["train"].select(range(min(num_examples, len(gsm8k["train"]))))
-    good_icl_examples = [(item["question"], item["answer"]) for item in train_subset]
+    use_math = True  
+
+    if use_math:
+        sv_neutral, model, tokenizer = build_reasoning_vectors_from_math(
+            model_name=model_name,
+            num_examples=num_examples,
+            layers=None,
+        )
+        sv_empty, _, _ = build_reasoning_vectors_from_math(
+            model_name=model_name,
+            num_examples=num_examples,
+            layers=None,
+        )
+        dataset_label = "MATH-HARD"
+    else:
+        sv_neutral, model, tokenizer = build_reasoning_vectors_from_gsm8k(
+            model_name=model_name,
+            num_examples=num_examples,
+            layers=None,
+        )
+        sv_empty, _, _ = build_reasoning_vectors_from_gsm8k(
+            model_name=model_name,
+            num_examples=num_examples,
+            layers=None,
+        )
+        dataset_label = "GSM8K"
     
     print("\n" + "="*60)
-    print("BUILDING STEERING VECTORS")
+    print(f"BUILDING STEERING VECTORS ({dataset_label})")
     print("="*60)
-    
-    print("\n[1] ICL vs NEUTRAL (problem only)")
-    sv_neutral = build_reasoning_steering_vector(
-        model, tokenizer, good_icl_examples,
-        num_samples=num_examples, baseline_type="neutral"
-    )
-    
-    print("\n[2] ICL vs EMPTY (no prompt)")
-    sv_empty = build_reasoning_steering_vector(
-        model, tokenizer, good_icl_examples,
-        num_samples=num_examples, baseline_type="empty"
-    )
     
     print("\n" + "="*60)
     print("VECTOR COMPARISON")

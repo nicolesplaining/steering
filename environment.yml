@@ -13,4 +13,5 @@ dependencies:
     - pyarrow>=14.0.0
     - matplotlib
     - numpy
+    - lighteval
 prefix: /opt/anaconda3/envs/steering-env
