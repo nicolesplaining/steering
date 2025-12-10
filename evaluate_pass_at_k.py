@@ -33,59 +33,6 @@ def pass_at_k(n: int, c: int, k: int) -> float:
     return 1.0 - np.prod(1.0 - k / np.arange(n - c + 1, n + 1))
 
 
-def apply_steering_with_strength(model, steering_vector, strength: float = 1.0):
-    hooks = []
-    vectors_dict = None
-    if hasattr(steering_vector, 'layer_activations'):
-        vectors_dict = steering_vector.layer_activations
-    elif hasattr(steering_vector, 'vectors'):
-        vectors_dict = steering_vector.vectors
-    elif hasattr(steering_vector, '_vectors'):
-        vectors_dict = steering_vector._vectors
-    else:
-        print("Warning: Could not access steering vector data structure")
-        return hooks
-    
-    model_layers = None
-    if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-        model_layers = model.model.layers
-    elif hasattr(model, 'transformer') and hasattr(model.transformer, 'h'):
-        model_layers = model.transformer.h
-    elif hasattr(model, 'layers'):
-        model_layers = model.layers
-    else:
-        print("Warning: Could not find model layers")
-        return hooks
-    
-    for layer_idx, vector in vectors_dict.items():
-        if layer_idx >= len(model_layers):
-            continue
-        
-        scaled_vector = vector * strength if isinstance(vector, torch.Tensor) else vector
-        
-        def make_hook(v, layer_id=layer_idx):
-            def steering_hook(module, inputs):
-                hidden_states = inputs[0]
-                if isinstance(v, torch.Tensor):
-                    v_scaled = v.to(hidden_states.device, hidden_states.dtype)
-                    v_scaled = v_scaled.view(1, 1, -1) 
-                    return (hidden_states + v_scaled,) + inputs[1:]
-                return inputs
-            return steering_hook
-        
-        layer = model_layers[layer_idx]
-        hook = layer.register_forward_pre_hook(make_hook(scaled_vector))
-        hooks.append(hook)
-    
-    return hooks
-
-
-def remove_hooks(hooks):
-    """Remove all hooks from model."""
-    for hook in hooks:
-        hook.remove()
-
-
 def generate_rollouts(
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
@@ -93,6 +40,7 @@ def generate_rollouts(
     k: int,
     steering_vector: Optional[SteeringVector] = None,
     steering_strengths: Optional[List[float]] = None,
+    start_after_tokens: int = 0,
     max_new_tokens: int = 512,
     temperature: float = 0.8,
     top_p: float = 0.95,
@@ -107,29 +55,15 @@ def generate_rollouts(
             else:
                 alpha = 1.0 
             
-            if alpha != 1.0:
-                hooks = apply_steering_with_strength(model, steering_vector, alpha)
-                try:
-                    outputs = model.generate(
-                        **inputs,
-                        max_new_tokens=max_new_tokens,
-                        do_sample=True,
-                        temperature=temperature,
-                        top_p=top_p,
-                        num_return_sequences=1,
-                    )
-                finally:
-                    remove_hooks(hooks)
-            else:
-                with steering_vector.apply(model):
-                    outputs = model.generate(
-                        **inputs,
-                        max_new_tokens=max_new_tokens,
-                        do_sample=True,
-                        temperature=temperature,
-                        top_p=top_p,
-                        num_return_sequences=1,
-                    )
+            with steering_vector.apply(model, multiplier=alpha, min_token_index=start_after_tokens):
+                outputs = model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=True,
+                    temperature=temperature,
+                    top_p=top_p,
+                    num_return_sequences=1,
+                )
         else:
             outputs = model.generate(
                 **inputs,
@@ -156,6 +90,7 @@ def evaluate_pass_at_k(
     k: int = 10,
     steering_vector: Optional[SteeringVector] = None,
     steering_strengths: Optional[List[float]] = None,
+    start_after_tokens: int = 0,
     use_steering: bool = False,
 ) -> Dict[str, float]:
     results = defaultdict(list)
@@ -168,6 +103,7 @@ def evaluate_pass_at_k(
             k=k,
             steering_vector=steering_vector if use_steering else None,
             steering_strengths=steering_strengths if use_steering else None,
+            start_after_tokens=start_after_tokens if use_steering else 0,
         )
         
         correct = [is_correct(rollout, ground_truth) for rollout in rollouts]
@@ -191,6 +127,7 @@ def compare_vanilla_vs_steered(
     steering_vector: SteeringVector,
     k_max: int = 10,
     steering_strengths: Optional[List[float]] = None,
+    start_after_tokens: int = 0,
 ) -> Dict[str, Dict[int, float]]:
     print("Evaluating vanilla rollouts...")
     vanilla_results = evaluate_pass_at_k(
@@ -209,6 +146,7 @@ def compare_vanilla_vs_steered(
         k=k_max,
         steering_vector=steering_vector,
         steering_strengths=steering_strengths,
+        start_after_tokens=start_after_tokens,
         use_steering=True,
     )
     
