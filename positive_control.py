@@ -480,7 +480,7 @@ def get_gpt5_hint(client, problem: str, full_solution: str) -> str:
                     full_solution=full_solution
                 )}
             ],
-            max_tokens=500,
+            max_completion_tokens=500,
             temperature=0.3
         )
         return response.choices[0].message.content.strip()
