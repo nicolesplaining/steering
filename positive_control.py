@@ -245,7 +245,7 @@ def load_model(model_name: str = "Qwen/Qwen2.5-Math-7B-Instruct"):
     return model, tokenizer
 
 
-def generate_response(model, tokenizer, messages: List[dict], max_new_tokens: int = 2048) -> Dict:
+def generate_response(model, tokenizer, messages: List[dict], max_new_tokens: int = 8192) -> Dict:
     """Generate response from the model with full metrics."""
     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
@@ -849,7 +849,7 @@ def main():
             "num_icl_pool": args.num_icl,
             "seed": args.seed,
             "model": "Qwen/Qwen2.5-Math-7B-Instruct",
-            "max_new_tokens": 2048,
+            "max_new_tokens": 8192,
             "temperature": 0.6,
             "top_p": 0.95,
             "top_k": 20,
