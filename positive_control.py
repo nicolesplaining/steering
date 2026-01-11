@@ -473,15 +473,14 @@ def get_gpt5_hint(client, problem: str, full_solution: str) -> str:
     """Use GPT-5 to extract helpful hints from the solution."""
     try:
         response = client.chat.completions.create(
-            model="gpt-5",
+            model="gpt-5-nano",
             messages=[
                 {"role": "user", "content": HINT_SELECTION_PROMPT.format(
                     problem=problem,
                     full_solution=full_solution
                 )}
             ],
-            max_completion_tokens=500,
-            temperature=0.3
+            max_completion_tokens=500
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
