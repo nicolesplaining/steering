@@ -32,6 +32,15 @@ except ImportError:
     HAS_OPENAI = False
     print("WARNING: openai not installed. Approach 2 (GPT-5 hints) unavailable.")
 
+# Optional: latex2sympy2 for symbolic math comparison
+try:
+    from latex2sympy2 import latex2sympy
+    from sympy import simplify, N
+    HAS_SYMPY = True
+except ImportError:
+    HAS_SYMPY = False
+    print("WARNING: latex2sympy2 not installed. Math comparison will be string-only (less accurate).")
+
 
 # ============================================================================
 # ANSWER EXTRACTION
@@ -79,31 +88,98 @@ def normalize_answer(s: str) -> str:
     """Basic normalization for comparison."""
     s = s.strip().lower()
     s = re.sub(r'\\text\{([^}]*)\}', r'\1', s)
-    s = re.sub(r'\\(?:frac|dfrac)\{([^}]*)\}\{([^}]*)\}', r'(\1)/(\2)', s)
     s = s.replace(" ", "").replace(",", "")
     return s
 
 
-def is_correct(predicted: str, ground_truth: str) -> bool:
-    """Check if predicted answer matches ground truth."""
-    if not predicted or not ground_truth:
-        return False
+def is_correct(predicted: str, ground_truth: str) -> Tuple[bool, Dict]:
+    """
+    Multi-stage comparison for math answers using sympy.
     
-    pred_norm = normalize_answer(predicted)
-    gt_norm = normalize_answer(ground_truth)
+    Stages:
+    1. Exact string match (after basic cleanup)
+    2. Numeric comparison via sympy (handles "0.5" vs "1/2")
+    3. Symbolic equivalence via sympy (handles algebraic expressions)
     
-    if pred_norm == gt_norm:
-        return True
+    Returns: (is_correct, debug_info)
+    """
+    debug = {
+        "pred_raw": predicted,
+        "gt_raw": ground_truth,
+        "pred_sympy": None,
+        "gt_sympy": None,
+        "pred_numeric": None,
+        "gt_numeric": None,
+        "match_type": None,
+    }
     
-    # Try numeric comparison
-    try:
-        pred_val = float(eval(pred_norm.replace("^", "**")))
-        gt_val = float(eval(gt_norm.replace("^", "**")))
-        return abs(pred_val - gt_val) < 1e-6
-    except:
-        pass
+    if not predicted:
+        debug["match_type"] = "empty_prediction"
+        return False, debug
     
-    return False
+    if not ground_truth:
+        debug["match_type"] = "empty_ground_truth"
+        return False, debug
+    
+    # Stage 1: Exact string match (after basic cleanup)
+    pred_clean = normalize_answer(predicted)
+    gt_clean = normalize_answer(ground_truth)
+    debug["pred_normalized"] = pred_clean
+    debug["gt_normalized"] = gt_clean
+    
+    if pred_clean == gt_clean:
+        debug["match_type"] = "exact_string"
+        return True, debug
+    
+    # Stage 2 & 3: Symbolic comparison (only if latex2sympy2 installed)
+    if HAS_SYMPY:
+        # Stage 2: Numeric comparison (handles "0.5" vs "1/2" if evaluable)
+        try:
+            pred_sym = latex2sympy(predicted)
+            gt_sym = latex2sympy(ground_truth)
+            debug["pred_sympy"] = str(pred_sym)
+            debug["gt_sympy"] = str(gt_sym)
+            
+            pred_val = float(N(pred_sym))
+            gt_val = float(N(gt_sym))
+            debug["pred_numeric"] = pred_val
+            debug["gt_numeric"] = gt_val
+            
+            if abs(pred_val - gt_val) < 1e-6:
+                debug["match_type"] = "numeric_sympy"
+                return True, debug
+        except Exception as e:
+            debug["numeric_error"] = str(e)
+        
+        # Stage 3: Symbolic equivalence (handles algebraic expressions)
+        try:
+            pred_sym = latex2sympy(predicted)
+            gt_sym = latex2sympy(ground_truth)
+            debug["pred_sympy"] = str(pred_sym)
+            debug["gt_sympy"] = str(gt_sym)
+            
+            if simplify(pred_sym - gt_sym) == 0:
+                debug["match_type"] = "symbolic_equiv"
+                return True, debug
+        except Exception as e:
+            debug["symbolic_error"] = str(e)
+    else:
+        debug["sympy_available"] = False
+        # Fallback: try basic numeric comparison without sympy
+        try:
+            # Remove LaTeX and try to evaluate
+            pred_eval = pred_clean.replace("^", "**").replace("\\", "")
+            gt_eval = gt_clean.replace("^", "**").replace("\\", "")
+            pred_val = float(eval(pred_eval))
+            gt_val = float(eval(gt_eval))
+            if abs(pred_val - gt_val) < 1e-6:
+                debug["match_type"] = "numeric_fallback"
+                return True, debug
+        except:
+            pass
+    
+    debug["match_type"] = "no_match"
+    return False, debug
 
 
 # ============================================================================
@@ -306,7 +382,7 @@ def evaluate_progressive_hints(
             if has_boxed:
                 format_ok_count += 1
             
-            correct = is_correct(predicted, ground_truth)
+            correct, match_debug = is_correct(predicted, ground_truth)
             if correct:
                 correct_count += 1
             
@@ -318,7 +394,8 @@ def evaluate_progressive_hints(
             
             status = "✓" if correct else "✗"
             trunc_flag = " [TRUNC]" if gen_result["hit_token_limit"] else ""
-            print(f"{i+1}/{len(test_set)} [{status}]{trunc_flag} pred={predicted[:30]}... gt={ground_truth[:30]}... ({gen_time:.1f}s, {gen_result['generated_tokens']} tok)")
+            match_type = match_debug.get("match_type", "unknown")
+            print(f"{i+1}/{len(test_set)} [{status}]{trunc_flag} pred={predicted[:30]}... gt={ground_truth[:30]}... ({gen_time:.1f}s, {match_type})")
             
             samples.append({
                 # Problem info
@@ -349,7 +426,8 @@ def evaluate_progressive_hints(
                 "has_boxed_format": has_boxed,
                 
                 # Evaluation
-                "correct": correct
+                "correct": correct,
+                "match_debug": match_debug  # Detailed comparison info (sympy results, match type)
             })
         
         accuracy = correct_count / len(test_set)
@@ -382,27 +460,32 @@ def evaluate_progressive_hints(
 # APPROACH 2: GPT-5 CURATED HINTS
 # ============================================================================
 
-HINT_SELECTION_PROMPT = """Given this math problem and its full solution trace, identify the most helpful 
-intermediate reasoning steps that could guide a student WITHOUT revealing the final answer.
+HINT_SELECTION_PROMPT = """You are selecting VERBATIM excerpts from a solution trace.
 
 Problem: {problem}
 
 Full Solution Trace:
 {full_solution}
 
-Extract 2-3 key reasoning steps that:
-1. Set up the problem correctly
-2. Identify the right approach/technique
-3. Do NOT include the final answer or final calculation
+---
 
-Return ONLY the extracted helpful hints, nothing else."""
+Your task: Copy-paste 2-3 VERBATIM excerpts from the solution trace above that represent pivotal reasoning moments or thought anchors. These should be exact quotes that help set up the problem or identify the approach WITHOUT revealing the final answer.
+
+CRITICAL RULES:
+1. ONLY output text that appears EXACTLY in the solution trace above - no paraphrasing
+2. Do NOT add any of your own words, explanations, or commentary
+3. Do NOT include any text containing the final answer or final calculation
+4. Do NOT add phrases like "Here are the excerpts:" or "The key steps are:"
+5. Just output the verbatim excerpts, separated by blank lines
+
+Output ONLY the verbatim excerpts, nothing else:"""
 
 
 def get_gpt5_hint(client, problem: str, full_solution: str) -> str:
     """Use GPT-5 to extract helpful hints from the solution."""
     try:
         response = client.chat.completions.create(
-            model="gpt-5"
+            model="gpt-5",
             messages=[
                 {"role": "user", "content": HINT_SELECTION_PROMPT.format(
                     problem=problem,
@@ -486,7 +569,7 @@ def evaluate_gpt5_hints(
             if has_boxed:
                 format_ok_count += 1
             
-            correct = is_correct(predicted, ground_truth)
+            correct, match_debug = is_correct(predicted, ground_truth)
             if correct:
                 correct_count += 1
             
@@ -497,7 +580,8 @@ def evaluate_gpt5_hints(
             
             status = "✓" if correct else "✗"
             trunc_flag = " [TRUNC]" if gen_result["hit_token_limit"] else ""
-            print(f"{i+1}/{len(test_set)} [{status}]{trunc_flag} pred={predicted[:30]}... ({gen_time:.1f}s)")
+            match_type = match_debug.get("match_type", "unknown")
+            print(f"{i+1}/{len(test_set)} [{status}]{trunc_flag} pred={predicted[:30]}... ({gen_time:.1f}s, {match_type})")
             
             samples.append({
                 "dataset_idx": dataset_idx,
@@ -517,7 +601,8 @@ def evaluate_gpt5_hints(
                 "ground_truth_raw": ground_truth,
                 "ground_truth_normalized": normalize_answer(ground_truth) if ground_truth else "",
                 "has_boxed_format": has_boxed,
-                "correct": correct
+                "correct": correct,
+                "match_debug": match_debug
             })
         
         accuracy = correct_count / len(test_set)
@@ -619,7 +704,7 @@ def evaluate_traditional_icl(
             if has_boxed:
                 format_ok_count += 1
             
-            correct = is_correct(predicted, ground_truth)
+            correct, match_debug = is_correct(predicted, ground_truth)
             if correct:
                 correct_count += 1
             
@@ -630,7 +715,8 @@ def evaluate_traditional_icl(
             
             status = "✓" if correct else "✗"
             trunc_flag = " [TRUNC]" if gen_result["hit_token_limit"] else ""
-            print(f"{i+1}/{len(test_set)} [{status}]{trunc_flag} pred={predicted[:30]}... gt={ground_truth[:30]}... ({gen_time:.1f}s, in={gen_result['input_tokens']}, out={gen_result['generated_tokens']})")
+            match_type = match_debug.get("match_type", "unknown")
+            print(f"{i+1}/{len(test_set)} [{status}]{trunc_flag} pred={predicted[:30]}... gt={ground_truth[:30]}... ({gen_time:.1f}s, {match_type})")
             
             samples.append({
                 "dataset_idx": dataset_idx,
@@ -651,7 +737,8 @@ def evaluate_traditional_icl(
                 "ground_truth_raw": ground_truth,
                 "ground_truth_normalized": normalize_answer(ground_truth) if ground_truth else "",
                 "has_boxed_format": has_boxed,
-                "correct": correct
+                "correct": correct,
+                "match_debug": match_debug
             })
         
         accuracy = correct_count / len(test_set)
