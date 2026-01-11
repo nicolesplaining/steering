@@ -402,7 +402,7 @@ def get_gpt5_hint(client, problem: str, full_solution: str) -> str:
     """Use GPT-5 to extract helpful hints from the solution."""
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # Using gpt-4o as GPT-5 proxy
+            model="gpt-5"
             messages=[
                 {"role": "user", "content": HINT_SELECTION_PROMPT.format(
                     problem=problem,
