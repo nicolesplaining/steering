@@ -165,18 +165,6 @@ def is_correct(predicted: str, ground_truth: str) -> Tuple[bool, Dict]:
             debug["symbolic_error"] = str(e)
     else:
         debug["sympy_available"] = False
-        # Fallback: try basic numeric comparison without sympy
-        try:
-            # Remove LaTeX and try to evaluate
-            pred_eval = pred_clean.replace("^", "**").replace("\\", "")
-            gt_eval = gt_clean.replace("^", "**").replace("\\", "")
-            pred_val = float(eval(pred_eval))
-            gt_val = float(eval(gt_eval))
-            if abs(pred_val - gt_val) < 1e-6:
-                debug["match_type"] = "numeric_fallback"
-                return True, debug
-        except:
-            pass
     
     debug["match_type"] = "no_match"
     return False, debug
