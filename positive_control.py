@@ -866,11 +866,13 @@ def main():
         all_results["approach1_progressive_hints"] = results1
     
     if 2 in args.approach:
-        if args.openai_key:
-            results2 = evaluate_gpt5_hints(model, tokenizer, test_set, args.openai_key, args.output)
+        # Check for API key: command line > environment variable
+        openai_key = args.openai_key or os.environ.get("OPENAI_API_KEY")
+        if openai_key:
+            results2 = evaluate_gpt5_hints(model, tokenizer, test_set, openai_key, args.output)
             all_results["approach2_gpt5_hints"] = results2
         else:
-            print("\nSkipping Approach 2: --openai-key not provided")
+            print("\nSkipping Approach 2: No OpenAI key (use --openai-key or set OPENAI_API_KEY)")
     
     if 3 in args.approach:
         k_values = [0, 1, 3, 5, 7, 9]
