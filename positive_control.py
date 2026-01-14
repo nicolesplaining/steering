@@ -174,7 +174,22 @@ def is_correct(predicted: str, ground_truth: str) -> Tuple[bool, Dict]:
 # DATA LOADING
 # ============================================================================
 
-def load_openthoughts_math(num_icl: int = 500, num_test: int = 100, seed: int = 42) -> Tuple[List[dict], List[dict], dict]:
+def estimate_solution_tokens(example: dict) -> int:
+    """Estimate token count for a solution (words * 1.3)."""
+    for conv in example.get('conversations', []):
+        if conv.get('from') == 'assistant':
+            words = len(conv.get('value', '').split())
+            return int(words * 1.3)
+    return 0
+
+
+def load_openthoughts_math(
+    num_icl: int = 500, 
+    num_test: int = 100, 
+    seed: int = 42,
+    max_solution_tokens: int = 2000,
+    max_icl_solution_tokens: int = 1000
+) -> Tuple[List[dict], List[dict], dict]:
     """Load and split the OpenThoughts-114k-math dataset."""
     print("Loading open-r1/OpenThoughts-114k-math...")
     ds = load_dataset("open-r1/OpenThoughts-114k-math", split="train")
@@ -183,37 +198,58 @@ def load_openthoughts_math(num_icl: int = 500, num_test: int = 100, seed: int = 
     
     # Filter to verified correct solutions
     ds = ds.filter(lambda x: x.get('correct', False))
-    total_after_filter = len(ds)
-    print(f"Filtered to {total_after_filter} verified correct examples (from {total_before_filter})")
+    total_correct = len(ds)
+    print(f"Filtered to {total_correct} verified correct examples (from {total_before_filter})")
     
-    # Random sample
+    # Create separate pools with different token limits
+    # ICL pool: shorter solutions for fitting multiple in context
+    ds_icl = ds.filter(lambda x: estimate_solution_tokens(x) <= max_icl_solution_tokens)
+    print(f"ICL pool: {len(ds_icl)} examples with solutions ≤{max_icl_solution_tokens} tokens")
+    
+    # Test set: can be longer since we only need one at a time
+    ds_test = ds.filter(lambda x: estimate_solution_tokens(x) <= max_solution_tokens)
+    print(f"Test pool: {len(ds_test)} examples with solutions ≤{max_solution_tokens} tokens")
+    
+    # Random sample from each pool
     random.seed(seed)
-    indices = list(range(len(ds)))
-    random.shuffle(indices)
     
-    icl_indices = indices[:num_icl]
-    test_indices = indices[num_icl:num_icl + num_test]
+    # Sample ICL examples from short-solution pool
+    icl_indices_pool = list(range(len(ds_icl)))
+    random.shuffle(icl_indices_pool)
+    icl_indices = icl_indices_pool[:num_icl]
+    
+    # Sample test examples from longer-solution pool (excluding ICL examples by re-seeding)
+    random.seed(seed + 1)  # Different seed to avoid overlap issues
+    test_indices_pool = list(range(len(ds_test)))
+    random.shuffle(test_indices_pool)
+    test_indices = test_indices_pool[:num_test]
     
     # Add index to each example for tracking
     icl_pool = []
     for idx in icl_indices:
-        ex = dict(ds[idx])
+        ex = dict(ds_icl[idx])
         ex['__index__'] = idx
+        ex['__solution_tokens__'] = estimate_solution_tokens(ex)
         icl_pool.append(ex)
     
     test_set = []
     for idx in test_indices:
-        ex = dict(ds[idx])
+        ex = dict(ds_test[idx])
         ex['__index__'] = idx
+        ex['__solution_tokens__'] = estimate_solution_tokens(ex)
         test_set.append(ex)
     
-    print(f"ICL pool: {len(icl_pool)}, Test set: {len(test_set)}")
+    print(f"ICL pool: {len(icl_pool)} (≤{max_icl_solution_tokens} tok), Test set: {len(test_set)} (≤{max_solution_tokens} tok)")
     
     # Return metadata for logging
     metadata = {
         "dataset": "open-r1/OpenThoughts-114k-math",
         "total_examples": total_before_filter,
-        "correct_examples": total_after_filter,
+        "correct_examples": total_correct,
+        "icl_pool_available": len(ds_icl),
+        "test_pool_available": len(ds_test),
+        "max_solution_tokens": max_solution_tokens,
+        "max_icl_solution_tokens": max_icl_solution_tokens,
         "seed": seed,
         "icl_pool_size": len(icl_pool),
         "test_set_size": len(test_set),
@@ -283,14 +319,28 @@ def generate_response(model, tokenizer, messages: List[dict], max_new_tokens: in
 # APPROACH 1: PROGRESSIVE HINTS
 # ============================================================================
 
+def strip_special_tokens(text: str) -> str:
+    """Strip all model-specific tokens from reasoning traces."""
+    # R1/OpenThoughts tokens
+    tokens_to_remove = [
+        '<|begin_of_thought|>', '<|end_of_thought|>',
+        '<|begin_of_solution|>', '<|end_of_solution|>',
+        # DeepSeek tokens
+        '<think>', '</think>',
+        '<reasoning>', '</reasoning>',
+        '<reflection>', '</reflection>',
+        # Other common tokens
+        '<answer>', '</answer>',
+        '<solution>', '</solution>',
+    ]
+    for token in tokens_to_remove:
+        text = text.replace(token, '')
+    return text
+
+
 def split_solution_paragraphs(solution_text: str) -> List[str]:
-    """Split R1 solution into paragraphs, handling special tags."""
-    # Remove special tags but keep the content
-    text = solution_text
-    text = text.replace('<|begin_of_thought|>', '')
-    text = text.replace('<|end_of_thought|>', '')
-    text = text.replace('<|begin_of_solution|>', '')
-    text = text.replace('<|end_of_solution|>', '')
+    """Split solution into paragraphs, stripping special tags."""
+    text = strip_special_tokens(solution_text)
     
     # Split by double newlines
     paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
@@ -312,7 +362,7 @@ def evaluate_progressive_hints(
     """Evaluate with progressive hint percentages."""
     
     results = {}
-    system_prompt = "Please reason step by step, and put your final answer within \\boxed{}."
+    system_prompt = "You are a helpful math assistant. Solve the problem step by step."
     
     for pct in percentages:
         print(f"\n{'='*60}")
@@ -345,9 +395,9 @@ def evaluate_progressive_hints(
             
             # Build prompt
             if hint:
-                user_content = f"Problem: {problem}\n\nHere's some helpful reasoning:\n{hint}\n\nNow solve the problem completely."
+                user_content = f"Problem: {problem}\n\nHere is some reasoning that may help:\n{hint}\n\nSolve the problem and give your final answer in \\boxed{{}}."
             else:
-                user_content = f"Problem: {problem}"
+                user_content = f"Problem: {problem}\n\nSolve the problem and give your final answer in \\boxed{{}}."
             
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -470,27 +520,50 @@ Output ONLY the verbatim excerpts, nothing else:"""
 
 
 def get_gpt5_hint(client, problem: str, full_solution: str) -> str:
-    """Use GPT-5 to extract helpful hints from the solution."""
+    """Use GPT-5 to extract helpful hints from the solution via Responses API."""
     try:
-        response = client.chat.completions.create(
-            model="gpt-5-nano",
-            messages=[
-                {"role": "user", "content": HINT_SELECTION_PROMPT.format(
-                    problem=problem,
-                    full_solution=full_solution
-                )}
-            ],
-            max_completion_tokens=500
+        prompt_content = HINT_SELECTION_PROMPT.format(
+            problem=problem,
+            full_solution=full_solution
         )
-        return response.choices[0].message.content.strip()
+        print(f"  [GPT API] Calling gpt-5-nano via Responses API with {len(prompt_content)} chars...")
+        
+        # Use Responses API - supports reasoning control
+        response = client.responses.create(
+            model="gpt-5-nano",
+            input=prompt_content,
+            reasoning={"effort": "minimal"},  # Minimal reasoning for simple extraction
+            max_output_tokens=1000
+        )
+        
+        # Extract text from response
+        hint = response.output_text
+        
+        if hint:
+            hint = hint.strip()
+            print(f"  [GPT API] Got hint: {len(hint)} chars")
+            print(f"  [GPT API] Hint preview: {hint[:200]}...")
+        else:
+            print(f"  [GPT API] WARNING: output_text was empty")
+        
+        return hint if hint else ""
+        
     except Exception as e:
-        print(f"GPT-5 API error: {e}")
+        import traceback
+        print(f"\n{'='*50}")
+        print(f"GPT API ERROR:")
+        print(f"  Exception type: {type(e).__name__}")
+        print(f"  Message: {e}")
+        print(f"  Full traceback:")
+        traceback.print_exc()
+        print(f"{'='*50}\n")
         return ""
 
 
 def evaluate_gpt5_hints(
     model, tokenizer, test_set: List[dict], 
-    openai_api_key: str, save_path: str
+    openai_api_key: str, save_path: str,
+    hint_only: bool = False  # If True, skip the no_hint baseline
 ) -> Dict[str, dict]:
     """Evaluate with and without GPT-5 curated hints."""
     
@@ -500,9 +573,12 @@ def evaluate_gpt5_hints(
     
     client = OpenAI(api_key=openai_api_key)
     results = {"no_hint": {}, "with_hint": {}}
-    system_prompt = "Please reason step by step, and put your final answer within \\boxed{}."
+    system_prompt = "You are a helpful math assistant."
     
-    for use_hint in [False, True]:
+    # If hint_only mode, skip the no_hint baseline
+    modes_to_run = [True] if hint_only else [False, True]
+    
+    for use_hint in modes_to_run:
         mode = "with_hint" if use_hint else "no_hint"
         print(f"\n{'='*60}")
         print(f"APPROACH 2: GPT-5 Hints - {mode}")
@@ -532,9 +608,9 @@ def evaluate_gpt5_hints(
             
             # Build prompt
             if hint:
-                user_content = f"Problem: {problem}\n\nHelpful hints:\n{hint}\n\nNow solve the problem."
+                user_content = f"Problem: {problem}\n\nKey insights that may help:\n{hint}\n\nSolve the problem step by step. Final answer in \\boxed{{}}."
             else:
-                user_content = f"Problem: {problem}"
+                user_content = f"Problem: {problem}\n\nSolve the problem step by step. Final answer in \\boxed{{}}."
             
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -628,7 +704,7 @@ def evaluate_traditional_icl(
     """Evaluate with k ICL examples from other problems."""
     
     results = {}
-    system_prompt = "Please reason step by step, and put your final answer within \\boxed{}."
+    system_prompt = "You are a helpful math assistant. Solve problems step by step."
     
     for k in k_values:
         print(f"\n{'='*60}")
@@ -658,14 +734,14 @@ def evaluate_traditional_icl(
             for icl_ex in icl_examples:
                 icl_problem = icl_ex['problem']
                 icl_source = icl_ex.get('source', 'unknown')
-                # Get the solution from conversations
+                # Get the solution from conversations and strip special tokens
                 icl_solution = ""
                 for conv in icl_ex.get('conversations', []):
                     if conv.get('from') == 'assistant':
-                        icl_solution = conv.get('value', '')
+                        icl_solution = strip_special_tokens(conv.get('value', ''))
                         break
                 
-                messages.append({"role": "user", "content": f"Problem: {icl_problem}"})
+                messages.append({"role": "user", "content": icl_problem})
                 messages.append({"role": "assistant", "content": icl_solution})
                 
                 icl_info.append({
@@ -674,7 +750,7 @@ def evaluate_traditional_icl(
                     "solution_length": len(icl_solution)
                 })
             
-            messages.append({"role": "user", "content": f"Problem: {problem}"})
+            messages.append({"role": "user", "content": problem})
             
             # Generate
             start_time = time.time()
@@ -806,15 +882,26 @@ def print_summary(results: dict):
 
 def main():
     parser = argparse.ArgumentParser(description="Positive Control: Validate CoT helps performance")
-    parser.add_argument("--approach", type=int, choices=[1, 2, 3], nargs="+", default=[1, 3],
+    parser.add_argument("--approach", type=int, choices=[1, 2, 3], nargs="+", default=[3],
                        help="Which approach(es) to run: 1=progressive hints, 2=GPT-5 hints, 3=traditional ICL")
     parser.add_argument("-n", "--num-test", type=int, default=50, help="Number of test problems")
     parser.add_argument("--num-icl", type=int, default=500, help="Size of ICL pool")
+    parser.add_argument("--max-solution-tokens", type=int, default=2000, 
+                       help="Max tokens per solution for test set")
+    parser.add_argument("--max-icl-tokens", type=int, default=1000,
+                       help="Max tokens per ICL solution (shorter for fitting multiple)")
     parser.add_argument("--openai-key", type=str, default=None, help="OpenAI API key for approach 2")
     parser.add_argument("--test", action="store_true", help="Quick test with 5 problems")
+    parser.add_argument("--test-gpt", action="store_true", help="Test GPT hints only (approach 2, with_hint mode, 5 problems)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--output", type=str, default=None, help="Output JSON path")
     args = parser.parse_args()
+    
+    # Special GPT test mode
+    if args.test_gpt:
+        args.approach = [2]
+        args.num_test = 5
+        print("GPT TEST MODE: 5 problems, approach 2 only, with_hint mode only")
     
     # Set seed
     random.seed(args.seed)
@@ -835,7 +922,10 @@ def main():
     print(f"Test problems: {args.num_test}")
     
     # Load data
-    icl_pool, test_set, data_metadata = load_openthoughts_math(args.num_icl, args.num_test, args.seed)
+    icl_pool, test_set, data_metadata = load_openthoughts_math(
+        args.num_icl, args.num_test, args.seed, 
+        args.max_solution_tokens, args.max_icl_tokens
+    )
     
     # Load model
     model, tokenizer = load_model()
@@ -846,6 +936,8 @@ def main():
             "approaches": args.approach,
             "num_test": args.num_test,
             "num_icl_pool": args.num_icl,
+            "max_solution_tokens": args.max_solution_tokens,
+            "max_icl_solution_tokens": args.max_icl_tokens,
             "seed": args.seed,
             "model": "Qwen/Qwen2.5-Math-7B-Instruct",
             "max_new_tokens": 8192,
@@ -868,13 +960,16 @@ def main():
         # Check for API key: command line > environment variable
         openai_key = args.openai_key or os.environ.get("OPENAI_API_KEY")
         if openai_key:
-            results2 = evaluate_gpt5_hints(model, tokenizer, test_set, openai_key, args.output)
+            results2 = evaluate_gpt5_hints(
+                model, tokenizer, test_set, openai_key, args.output,
+                hint_only=args.test_gpt  # Skip no_hint baseline in test-gpt mode
+            )
             all_results["approach2_gpt5_hints"] = results2
         else:
             print("\nSkipping Approach 2: No OpenAI key (use --openai-key or set OPENAI_API_KEY)")
     
     if 3 in args.approach:
-        k_values = [0, 1, 3, 5, 7, 9]
+        k_values = [0, 1, 2, 3]
         results3 = evaluate_traditional_icl(model, tokenizer, test_set, icl_pool, k_values, args.output)
         all_results["approach3_traditional_icl"] = results3
     
