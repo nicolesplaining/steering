@@ -40,12 +40,13 @@ def generate_rollouts(
     k: int,
     steering_vector: Optional[SteeringVector] = None,
     steering_strengths: Optional[List[float]] = None,
-    start_after_tokens: int = 0,
+    start_after_tokens: int = 0,  # delay steering until k generated tokens AFTER the prompt
     max_new_tokens: int = 512,
     temperature: float = 0.8,
     top_p: float = 0.95,
 ) -> List[str]:
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    prompt_len = inputs["input_ids"].shape[1]
     rollouts = []
     
     for i in range(k):
@@ -55,7 +56,8 @@ def generate_rollouts(
             else:
                 alpha = 1.0 
             
-            with steering_vector.apply(model, multiplier=alpha, min_token_index=start_after_tokens):
+            min_token_index = prompt_len + start_after_tokens
+            with steering_vector.apply(model, multiplier=alpha, min_token_index=min_token_index):
                 outputs = model.generate(
                     **inputs,
                     max_new_tokens=max_new_tokens,
