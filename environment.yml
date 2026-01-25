@@ -15,4 +15,5 @@ dependencies:
     - numpy
     - lighteval
     - matplotlib
+    - openai
 prefix: /opt/anaconda3/envs/steering-env
