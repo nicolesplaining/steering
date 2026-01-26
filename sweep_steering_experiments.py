@@ -88,6 +88,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Save steering vectors for each layer set/baseline.",
     )
+    parser.add_argument(
+        "--baseline-filter",
+        type=str,
+        default=None,
+        choices=["hinted_minus_unhinted", "hinted_minus_empty"],
+        help="Filter to test only this baseline type (default: test both).",
+    )
     return parser.parse_args()
 
 
@@ -260,10 +267,20 @@ def main() -> None:
             torch.save(vector_unhinted, output_dir / f"vector_hinted_minus_unhinted_{layers[0]}_{layers[-1]}.pt")
             torch.save(vector_empty, output_dir / f"vector_hinted_minus_empty_{layers[0]}_{layers[-1]}.pt")
 
-        for baseline_name, vector in [
+        # Filter baselines if --baseline-filter is specified
+        baseline_pairs = [
             ("hinted_minus_unhinted", vector_unhinted),
             ("hinted_minus_empty", vector_empty),
-        ]:
+        ]
+        if args.baseline_filter:
+            baseline_pairs = [
+                (name, vec) for name, vec in baseline_pairs
+                if name == args.baseline_filter
+            ]
+            if not baseline_pairs:
+                raise ValueError(f"Invalid baseline filter: {args.baseline_filter}")
+
+        for baseline_name, vector in baseline_pairs:
             for strength in strengths:
                 vanilla_correct = 0
                 steered_correct = 0

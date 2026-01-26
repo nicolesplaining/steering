@@ -1,0 +1,80 @@
+{
+  "config": {
+    "input": "/lambda/nfs/steering/results/run_20260125_065836/wrong_subset_with_hints.json",
+    "model": "Qwen/Qwen2.5-Math-1.5B-Instruct",
+    "layer_sets": [
+      [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    ],
+    "strengths": [
+      0.5,
+      0.8
+    ],
+    "num_examples": 45,
+    "start_after_tokens": 0,
+    "max_new_tokens": 512,
+    "timestamp": "2026-01-26T07:06:42.552545"
+  },
+  "results": [
+    {
+      "baseline": "hinted_minus_empty",
+      "layers": [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "strength": 0.5,
+      "total": 45,
+      "vanilla_correct": 4,
+      "steered_correct": 2,
+      "vanilla_accuracy": 0.08888888888888889,
+      "steered_accuracy": 0.044444444444444446,
+      "improved": 1
+    },
+    {
+      "baseline": "hinted_minus_empty",
+      "layers": [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "strength": 0.8,
+      "total": 45,
+      "vanilla_correct": 4,
+      "steered_correct": 4,
+      "vanilla_accuracy": 0.08888888888888889,
+      "steered_accuracy": 0.08888888888888889,
+      "improved": 3
+    }
+  ]
+}
