@@ -6,24 +6,18 @@ Evaluates Qwen2.5-Math-1.5B-Instruct on 500 random examples from OpenThoughts-11
 No ICL, no hints - just direct evaluation.
 """
 
+import argparse
 import json
 import random
 import re
 import time
 from datetime import datetime
 
+import numpy as np
 import torch
 from datasets import load_dataset
+from openai import OpenAI
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# Optional: latex2sympy2 for symbolic math comparison
-try:
-    from latex2sympy2 import latex2sympy
-    from sympy import simplify, N
-    HAS_SYMPY = True
-except ImportError:
-    HAS_SYMPY = False
-    print("WARNING: latex2sympy2 not installed. Math comparison will be string-only.")
 
 
 # ============================================================================
@@ -66,72 +60,41 @@ def extract_ground_truth(solution: str) -> str:
     return ""
 
 
-def normalize_answer(s: str) -> str:
-    """Basic normalization for comparison."""
-    s = s.strip().lower()
-    s = re.sub(r'\\text\{([^}]*)\}', r'\1', s)
-    s = s.replace(" ", "").replace(",", "")
-    return s
+def llm_judge_correctness(
+    client: OpenAI,
+    problem: str,
+    model_response: str,
+    ground_truth_solution: str,
+    seed: int,
+) -> tuple[bool, str]:
+    """Use GPT-5 to judge if the model's answer is correct."""
+    prompt = (
+        "You are a math answer grader. Given a math problem, a model's response, and the "
+        "ground truth solution, determine if the model's final answer is mathematically "
+        "equivalent to the correct answer.\n\n"
+        f"Problem: {problem}\n\n"
+        f"Model's Response: {model_response}\n\n"
+        f"Ground Truth Solution: {ground_truth_solution}\n\n"
+        'Is the model\'s final answer correct? Respond with ONLY "CORRECT" or "INCORRECT" '
+        "followed by a brief explanation."
+    )
 
+    response = client.chat.completions.create(
+        model="gpt-5",
+        messages=[{"role": "user", "content": prompt}],
+        seed=seed,
+    )
 
-def is_correct(predicted: str, ground_truth: str) -> tuple:
-    """Multi-stage comparison for math answers."""
-    debug = {
-        "pred_raw": predicted,
-        "gt_raw": ground_truth,
-        "match_type": None,
-    }
-    
-    if not predicted:
-        debug["match_type"] = "empty_prediction"
-        return False, debug
-    
-    if not ground_truth:
-        debug["match_type"] = "empty_ground_truth"
-        return False, debug
-    
-    # Stage 1: Exact string match
-    pred_clean = normalize_answer(predicted)
-    gt_clean = normalize_answer(ground_truth)
-    
-    if pred_clean == gt_clean:
-        debug["match_type"] = "exact_string"
-        return True, debug
-    
-    # Stage 2 & 3: Symbolic comparison
-    if HAS_SYMPY:
-        try:
-            pred_sym = latex2sympy(predicted)
-            gt_sym = latex2sympy(ground_truth)
-            
-            pred_val = float(N(pred_sym))
-            gt_val = float(N(gt_sym))
-            
-            if abs(pred_val - gt_val) < 1e-6:
-                debug["match_type"] = "numeric_sympy"
-                return True, debug
-        except:
-            pass
-        
-        try:
-            pred_sym = latex2sympy(predicted)
-            gt_sym = latex2sympy(ground_truth)
-            
-            if simplify(pred_sym - gt_sym) == 0:
-                debug["match_type"] = "symbolic_equiv"
-                return True, debug
-        except:
-            pass
-    
-    debug["match_type"] = "no_match"
-    return False, debug
+    judgment = response.choices[0].message.content.strip()
+    is_correct = judgment.upper().startswith("CORRECT")
+    return is_correct, judgment
 
 
 # ============================================================================
 # MODEL
 # ============================================================================
 
-def load_model(model_name: str = "Qwen/Qwen2.5-Math-1.5B-Instruct"):
+def load_model(model_name: str):
     """Load the math model."""
     print(f"Loading {model_name}...")
     
@@ -196,15 +159,64 @@ def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 81
 # MAIN
 # ============================================================================
 
-def main():
-    seed = 42
-    n_samples = 500
-    
+def _set_seeds(seed: int) -> None:
     random.seed(seed)
+    np.random.seed(seed)
     torch.manual_seed(seed)
-    
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def _short_model_name(model_name: str) -> str:
+    return model_name.split("/")[-1].lower()
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Baseline evaluation on OpenThoughts-114k-math."
+    )
+    parser.add_argument(
+        "--model",
+        required=True,
+        help="Model ID to evaluate (e.g., Qwen/Qwen3-4B).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility.",
+    )
+    parser.add_argument(
+        "--n_samples",
+        type=int,
+        default=500,
+        help="Number of samples to evaluate.",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="Output JSON path. If omitted, a timestamped name is used.",
+    )
+    parser.add_argument(
+        "--max_new_tokens",
+        type=int,
+        default=8192,
+        help="Maximum number of tokens to generate.",
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = _parse_args()
+    seed = args.seed
+    n_samples = args.n_samples
+
+    _set_seeds(seed)
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = f"baseline_eval_{timestamp}.json"
+    output_path = args.output
+    if output_path is None:
+        output_path = f"baseline_eval_{_short_model_name(args.model)}_{timestamp}.json"
     
     print(f"Baseline Evaluation: {n_samples} samples")
     print(f"Output: {output_path}")
@@ -221,7 +233,8 @@ def main():
     sample_indices = indices[:n_samples]
     
     # Load model
-    model, tokenizer = load_model()
+    model, tokenizer = load_model(args.model)
+    judge_client = OpenAI()
     
     # Run evaluation
     results = []
@@ -247,7 +260,12 @@ def main():
         
         # Generate
         start_time = time.time()
-        gen_result = generate_response(model, tokenizer, messages)
+        gen_result = generate_response(
+            model,
+            tokenizer,
+            messages,
+            max_new_tokens=args.max_new_tokens,
+        )
         gen_time = time.time() - start_time
         
         # Handle skipped (too long)
@@ -270,8 +288,14 @@ def main():
         # Extract and evaluate
         predicted = extract_boxed_answer(response)
         ground_truth = extract_ground_truth(example['solution'])
-        
-        correct, match_debug = is_correct(predicted, ground_truth)
+
+        correct, llm_judgment = llm_judge_correctness(
+            judge_client,
+            problem=problem,
+            model_response=response,
+            ground_truth_solution=example['solution'],
+            seed=seed,
+        )
         if correct:
             correct_count += 1
         
@@ -279,7 +303,10 @@ def main():
         accuracy_so_far = correct_count / evaluated
         status = "✓" if correct else "✗"
         
-        print(f"{i+1}/{n_samples} [{status}] acc={accuracy_so_far*100:.1f}% | pred={predicted[:40]}... | gt={ground_truth[:40]}... | {gen_time:.1f}s")
+        print(
+            f"{i+1}/{n_samples} [{status}] acc={accuracy_so_far*100:.1f}% "
+            f"| pred={predicted[:40]}... | gt={ground_truth[:40]}... | {gen_time:.1f}s"
+        )
         
         # Log everything
         results.append({
@@ -293,7 +320,8 @@ def main():
             "predicted": predicted,
             "ground_truth": ground_truth,
             "correct": correct,
-            "match_type": match_debug.get("match_type"),
+            "match_type": "llm_judge",
+            "llm_judgment": llm_judgment,
             "input_tokens": gen_result["input_tokens"],
             "generated_tokens": gen_result["generated_tokens"],
             "generation_time_sec": gen_time,
@@ -301,10 +329,18 @@ def main():
         
         # Save incrementally
         if (i + 1) % 10 == 0:
-            _save_results(output_path, results, correct_count, i + 1, n_samples, seed)
+            _save_results(
+                output_path,
+                results,
+                correct_count,
+                i + 1,
+                n_samples,
+                seed,
+                args.model,
+            )
     
     # Final save
-    _save_results(output_path, results, correct_count, n_samples, n_samples, seed)
+    _save_results(output_path, results, correct_count, n_samples, n_samples, seed, args.model)
     
     # Summary
     evaluated = sum(1 for r in results if not r.get("skipped"))
@@ -319,14 +355,22 @@ def main():
     print(f"Results saved to: {output_path}")
 
 
-def _save_results(path: str, results: list, correct: int, done: int, total: int, seed: int):
+def _save_results(
+    path: str,
+    results: list,
+    correct: int,
+    done: int,
+    total: int,
+    seed: int,
+    model_name: str,
+):
     """Save results to JSON."""
     evaluated = sum(1 for r in results if not r.get("skipped"))
     skipped = sum(1 for r in results if r.get("skipped"))
     
     data = {
         "config": {
-            "model": "Qwen/Qwen2.5-Math-1.5B-Instruct",
+            "model": model_name,
             "dataset": "open-r1/OpenThoughts-114k-math",
             "n_samples": total,
             "max_context_length": MAX_CONTEXT_LENGTH,
