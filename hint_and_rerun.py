@@ -243,6 +243,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Use the ground-truth solution text directly as the hint.",
     )
+    parser.add_argument(
+        "--log-every",
+        type=int,
+        default=10,
+        help="Print progress every N items (default: 10).",
+    )
     return parser.parse_args()
 
 
@@ -485,6 +491,7 @@ def process_file(
     num_hints: int,
     use_llm_judge: bool,
     judge_model: str,
+    log_every: int,
 ) -> str:
     data = load_json(input_path)
     results = data.get("results", [])
@@ -514,7 +521,7 @@ def process_file(
     unchanged = 0
     still_wrong = 0
 
-    for item in results:
+    for idx, item in enumerate(results, start=1):
         original_predicted = item.get("predicted", "")
         original_correct = bool(item.get("correct"))
         original_match_type = item.get("match_type")
@@ -601,6 +608,15 @@ def process_file(
         if sleep_s > 0:
             time.sleep(sleep_s)
 
+        if log_every > 0 and (idx % log_every == 0 or idx == len(results)):
+            print(
+                f"[{idx}/{len(results)}] "
+                f"correct={hinted_correct} improved={improved} "
+                f"unchanged={unchanged} still_wrong={still_wrong} "
+                f"skipped={skipped} hint_errors={hint_errors}",
+                flush=True,
+            )
+
     total = len(output_items)
     accuracy = hinted_correct / total if total else 0.0
     output = {
@@ -661,6 +677,7 @@ def main() -> None:
             num_hints=args.num_hints,
             use_llm_judge=args.use_llm_judge,
             judge_model=args.judge_model,
+            log_every=args.log_every,
         )
         output_paths.append(output_path)
 

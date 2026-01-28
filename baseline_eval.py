@@ -114,7 +114,7 @@ def load_model(model_name: str):
 MAX_CONTEXT_LENGTH = 4096  # Qwen2.5-Math context limit
 
 
-def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 8192) -> dict:
+def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 4096) -> dict:
     """Generate response from the model."""
     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
@@ -131,10 +131,22 @@ def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 81
             "skip_reason": f"input_tokens ({input_tokens}) > MAX_CONTEXT_LENGTH ({MAX_CONTEXT_LENGTH})",
         }
     
+    # Cap generation so total tokens stay within the model context limit.
+    remaining_tokens = MAX_CONTEXT_LENGTH - input_tokens
+    if remaining_tokens <= 0:
+        return {
+            "text": "",
+            "input_tokens": input_tokens,
+            "generated_tokens": 0,
+            "skipped": True,
+            "skip_reason": f"no remaining tokens (input_tokens={input_tokens})",
+        }
+    capped_max_new_tokens = min(max_new_tokens, remaining_tokens)
+
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=max_new_tokens,
+            max_new_tokens=capped_max_new_tokens,
             do_sample=True,
             temperature=0.6,
             top_p=0.95,

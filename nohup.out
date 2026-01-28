@@ -1,0 +1,16 @@
+nohup: ignoring input
+Loading Qwen/Qwen2.5-Math-1.5B-Instruct...
+`torch_dtype` is deprecated! Use `dtype` instead!
+Model loaded on cuda:0
+[1/180] correct=0 improved=0 unchanged=0 still_wrong=1 skipped=0 hint_errors=0
+[2/180] correct=1 improved=1 unchanged=0 still_wrong=1 skipped=0 hint_errors=0
+[3/180] correct=1 improved=1 unchanged=0 still_wrong=2 skipped=0 hint_errors=0
+[4/180] correct=2 improved=2 unchanged=0 still_wrong=2 skipped=0 hint_errors=0
+[5/180] correct=3 improved=3 unchanged=0 still_wrong=2 skipped=0 hint_errors=0
+[6/180] correct=3 improved=3 unchanged=1 still_wrong=2 skipped=0 hint_errors=0
+[7/180] correct=4 improved=4 unchanged=1 still_wrong=2 skipped=0 hint_errors=0
+[8/180] correct=4 improved=4 unchanged=2 still_wrong=2 skipped=0 hint_errors=0
+[9/180] correct=4 improved=4 unchanged=2 still_wrong=3 skipped=0 hint_errors=0
+[10/180] correct=4 improved=4 unchanged=2 still_wrong=4 skipped=0 hint_errors=0
+[11/180] correct=4 improved=4 unchanged=3 still_wrong=4 skipped=0 hint_errors=0
+[12/180] correct=4 improved=4 unchanged=3 still_wrong=5 skipped=0 hint_errors=0
