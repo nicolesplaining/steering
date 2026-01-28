@@ -56,6 +56,41 @@ Ground-truth reasoning (for your reference; do NOT copy verbatim):
 
 Write ONLY the hint:"""
 
+STRONG_HINTS_PROMPT_TEMPLATE = """You are helping improve a math solver.
+
+Given the problem and the model's incorrect attempt, write STRONG hints that
+explicitly diagnose the mistake and prescribe the exact fix. Each hint must:
+- state a specific error to avoid (what not to do)
+- name the exact theorem/technique to use and how to apply it
+- include one concrete intermediate step or relationship (no final result)
+- avoid giving the final answer or final numeric result
+- avoid copying the ground-truth answer verbatim
+
+Return {num_hints} concise hints, each 2-4 sentences, labeled as:
+Hint 1: ...
+Hint 2: ...
+(etc.)
+
+Problem:
+{problem}
+
+Model attempt (incorrect):
+{response}
+
+Model predicted answer:
+{predicted}
+
+Match type (if provided):
+{match_type}
+
+Ground-truth answer (do NOT reveal this):
+{ground_truth}
+
+Ground-truth reasoning (for your reference; do NOT copy verbatim):
+{solution}
+
+Write ONLY the hints:"""
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -76,6 +111,17 @@ def parse_args() -> argparse.Namespace:
         "--openai-model",
         default="gpt-4.1",
         help="OpenAI model for hint generation (default: gpt-4.1).",
+    )
+    parser.add_argument(
+        "--strong-hints",
+        action="store_true",
+        help="Use stronger, multi-hint instructions for OpenAI hints.",
+    )
+    parser.add_argument(
+        "--num-hints",
+        type=int,
+        default=1,
+        help="Number of hints to request per item (default: 1).",
     )
     parser.add_argument(
         "--qwen-model",
@@ -123,14 +169,14 @@ def write_json(path: str, data: Dict[str, Any]) -> None:
         handle.write("\n")
 
 
-def build_hint_prompt(item: Dict[str, Any]) -> str:
+def build_hint_prompt(item: Dict[str, Any], num_hints: int = 1) -> str:
     problem = item.get("problem", "")
     response = item.get("response", "")
     predicted = item.get("predicted", "")
     ground_truth = item.get("ground_truth", "")
     match_type = item.get("match_type", "")
     solution = item.get("solution", "")
-    return HINT_PROMPT_TEMPLATE.format(
+    prompt = HINT_PROMPT_TEMPLATE.format(
         problem=problem,
         response=response,
         predicted=predicted,
@@ -138,12 +184,76 @@ def build_hint_prompt(item: Dict[str, Any]) -> str:
         ground_truth=ground_truth,
         solution=solution,
     )
+    if num_hints and num_hints > 1:
+        prompt += f"\n\nReturn {num_hints} hints labeled as:\nHint 1: ...\nHint 2: ...\n(etc.)"
+    return prompt
 
 
-def generate_hint(client: OpenAI, model: str, item: Dict[str, Any]) -> Dict[str, Any]:
-    prompt = build_hint_prompt(item)
+def build_strong_hint_prompt(item: Dict[str, Any], num_hints: int) -> str:
+    problem = item.get("problem", "")
+    response = item.get("response", "")
+    predicted = item.get("predicted", "")
+    ground_truth = item.get("ground_truth", "")
+    match_type = item.get("match_type", "")
+    solution = item.get("solution", "")
+    return STRONG_HINTS_PROMPT_TEMPLATE.format(
+        problem=problem,
+        response=response,
+        predicted=predicted,
+        match_type=match_type,
+        ground_truth=ground_truth,
+        solution=solution,
+        num_hints=max(1, num_hints),
+    )
+
+
+def parse_hints(text: str, num_hints: int) -> List[str]:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return []
+
+    hints: List[str] = []
+    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+
+    current: List[str] = []
+    for line in lines:
+        lower = line.lower()
+        if lower.startswith("hint ") or lower.startswith("hint:") or lower.startswith("hint1") or lower.startswith("hint2"):
+            if current:
+                hints.append(" ".join(current).strip())
+                current = []
+            line = line.split(":", 1)[-1].strip() if ":" in line else line
+            if line:
+                current.append(line)
+        else:
+            current.append(line)
+    if current:
+        hints.append(" ".join(current).strip())
+
+    if not hints:
+        hints = [line for line in lines if line]
+
+    if num_hints > 0:
+        hints = hints[:num_hints]
+
+    return [hint for hint in hints if hint]
+
+
+def generate_hint(
+    client: OpenAI,
+    model: str,
+    item: Dict[str, Any],
+    strong_hints: bool = False,
+    num_hints: int = 1,
+) -> Dict[str, Any]:
+    prompt = (
+        build_strong_hint_prompt(item, num_hints)
+        if strong_hints
+        else build_hint_prompt(item, num_hints)
+    )
     result: Dict[str, Any] = {
         "hint": "",
+        "hints": [],
         "error": None,
         "openai_model": model,
         "openai_usage": None,
@@ -155,7 +265,13 @@ def generate_hint(client: OpenAI, model: str, item: Dict[str, Any]) -> Dict[str,
             max_output_tokens=512,
         )
         hint_text = (response.output_text or "").strip()
-        result["hint"] = hint_text
+        hints = parse_hints(hint_text, num_hints)
+        result["hints"] = hints
+        if hints:
+            combined = "\n".join([f"Hint {idx + 1}: {hint}" for idx, hint in enumerate(hints)])
+        else:
+            combined = hint_text
+        result["hint"] = combined
         if hasattr(response, "usage") and response.usage is not None:
             result["openai_usage"] = {
                 "input_tokens": response.usage.input_tokens,
@@ -228,6 +344,8 @@ def process_file(
     mock_hints: bool,
     mock_hint_text: str,
     use_solution_hint: bool,
+    strong_hints: bool,
+    num_hints: int,
 ) -> str:
     data = load_json(input_path)
     results = data.get("results", [])
@@ -265,6 +383,7 @@ def process_file(
         if use_solution_hint:
             hint_data = {
                 "hint": item.get("solution", ""),
+                "hints": [item.get("solution", "")] if item.get("solution", "") else [],
                 "error": None,
                 "openai_model": "solution",
                 "openai_usage": None,
@@ -272,13 +391,15 @@ def process_file(
         elif mock_hints:
             hint_data = {
                 "hint": mock_hint_text,
+                "hints": [mock_hint_text] * max(1, num_hints) if mock_hint_text else [],
                 "error": None,
                 "openai_model": "mock",
                 "openai_usage": None,
             }
         else:
-            hint_data = generate_hint(client, openai_model, item)
+            hint_data = generate_hint(client, openai_model, item, strong_hints, num_hints)
         hint = hint_data.get("hint", "")
+        hints_list = hint_data.get("hints", [])
         if hint_data.get("error"):
             hint_errors += 1
 
@@ -310,6 +431,8 @@ def process_file(
                 "problem": item.get("problem"),
                 "original": item,
                 "hint": hint,
+                "hints": hints_list,
+                "hint_text": hint,
                 "hint_error": hint_data.get("error"),
                 "hint_openai_usage": hint_data.get("openai_usage"),
                 "rerun": rerun,
@@ -340,6 +463,8 @@ def process_file(
             "device": device,
             "mock_hints": mock_hints,
             "use_solution_hint": use_solution_hint,
+            "strong_hints": strong_hints,
+            "num_hints": num_hints,
             "timestamp": datetime.now().isoformat(),
         },
         "summary": {
@@ -382,6 +507,8 @@ def main() -> None:
             mock_hints=args.mock_hints,
             mock_hint_text=args.mock_hint_text,
             use_solution_hint=args.use_solution_hint,
+            strong_hints=args.strong_hints,
+            num_hints=args.num_hints,
         )
         output_paths.append(output_path)
 
