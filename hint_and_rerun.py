@@ -249,6 +249,11 @@ def parse_args() -> argparse.Namespace:
         default=10,
         help="Print progress every N items (default: 10).",
     )
+    parser.add_argument(
+        "--log-prompt",
+        action="store_true",
+        help="Print the hinted prompt and hint for each item.",
+    )
     return parser.parse_args()
 
 
@@ -492,6 +497,7 @@ def process_file(
     use_llm_judge: bool,
     judge_model: str,
     log_every: int,
+    log_prompt: bool,
 ) -> str:
     data = load_json(input_path)
     results = data.get("results", [])
@@ -549,6 +555,23 @@ def process_file(
         hints_list = hint_data.get("hints", [])
         if hint_data.get("error"):
             hint_errors += 1
+
+        if log_prompt:
+            messages = build_hinted_prompt(item.get("problem", ""), hint)
+            print(
+                "\n".join(
+                    [
+                        "=" * 80,
+                        f"ITEM {idx}/{len(results)}",
+                        "HINT:",
+                        hint or "<empty hint>",
+                        "PROMPT:",
+                        messages[-1].get("content", ""),
+                        "=" * 80,
+                    ]
+                ),
+                flush=True,
+            )
 
         rerun = rerun_with_hint(
             model,
@@ -678,6 +701,7 @@ def main() -> None:
             use_llm_judge=args.use_llm_judge,
             judge_model=args.judge_model,
             log_every=args.log_every,
+            log_prompt=args.log_prompt,
         )
         output_paths.append(output_path)
 
