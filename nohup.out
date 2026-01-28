@@ -14,3 +14,10 @@ Model loaded on cuda:0
 [10/180] correct=4 improved=4 unchanged=2 still_wrong=4 skipped=0 hint_errors=0
 [11/180] correct=4 improved=4 unchanged=3 still_wrong=4 skipped=0 hint_errors=0
 [12/180] correct=4 improved=4 unchanged=3 still_wrong=5 skipped=0 hint_errors=0
+[13/180] correct=4 improved=4 unchanged=4 still_wrong=5 skipped=0 hint_errors=0
+[14/180] correct=4 improved=4 unchanged=4 still_wrong=6 skipped=0 hint_errors=0
+[15/180] correct=4 improved=4 unchanged=5 still_wrong=6 skipped=0 hint_errors=0
+[16/180] correct=5 improved=5 unchanged=5 still_wrong=6 skipped=0 hint_errors=0
+[17/180] correct=5 improved=5 unchanged=6 still_wrong=6 skipped=0 hint_errors=0
+[18/180] correct=5 improved=5 unchanged=6 still_wrong=7 skipped=0 hint_errors=0
+[19/180] correct=5 improved=5 unchanged=6 still_wrong=8 skipped=0 hint_errors=0
