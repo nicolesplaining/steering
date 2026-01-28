@@ -137,9 +137,11 @@ Write ONLY the hint:"""
 STRONG_HINTS_PROMPT_TEMPLATE = """You are helping improve a math solver.
 
 Given the problem and the model's incorrect attempt, write STRONG hints that
-explicitly diagnose the mistake and prescribe the exact fix. Each hint must:
+explicitly diagnose the mistake and prescribe the exact fix. Each hint should:
+- be concise but strong (2-4 sentences)
 - state a specific error to avoid (what not to do)
 - name the exact theorem/technique to use and how to apply it
+- consider why the model originally got the question wrong, and use that to generate a hint that will best aid it
 - include one concrete intermediate step or relationship (no final result)
 - avoid giving the final answer or final numeric result
 - avoid copying the ground-truth answer verbatim
