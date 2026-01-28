@@ -17,7 +17,8 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from steering_vectors import SteeringVector, train_steering_vector
 
-from baseline_eval import extract_boxed_answer, extract_ground_truth, is_correct, load_model
+from baseline_eval import extract_boxed_answer, extract_ground_truth, load_model
+from hint_and_rerun import is_correct
 
 
 SYSTEM_PROMPT = "You are a helpful math assistant."
