@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
@@ -11,7 +12,6 @@ from baseline_eval import (
     extract_boxed_answer,
     extract_ground_truth,
     generate_response,
-    is_correct,
     load_model,
 )
 
@@ -24,6 +24,84 @@ except ImportError:
         from openai import OpenAI  # pragma: no cover
     else:
         OpenAI = Any  # type: ignore[misc,assignment]
+
+try:
+    from latex2sympy2 import latex2sympy
+    from sympy import simplify, N
+    HAS_SYMPY = True
+except ImportError:
+    HAS_SYMPY = False
+
+
+def normalize_answer(s: str) -> str:
+    s = s.strip().lower()
+    s = re.sub(r'\\text\{([^}]*)\}', r'\1', s)
+    s = s.replace(" ", "").replace(",", "")
+    return s
+
+
+def is_correct(predicted: str, ground_truth: str) -> tuple[bool, Dict]:
+    debug = {
+        "pred_raw": predicted,
+        "gt_raw": ground_truth,
+        "pred_sympy": None,
+        "gt_sympy": None,
+        "pred_numeric": None,
+        "gt_numeric": None,
+        "match_type": None,
+    }
+
+    if not predicted:
+        debug["match_type"] = "empty_prediction"
+        return False, debug
+
+    if not ground_truth:
+        debug["match_type"] = "empty_ground_truth"
+        return False, debug
+
+    pred_clean = normalize_answer(predicted)
+    gt_clean = normalize_answer(ground_truth)
+    debug["pred_normalized"] = pred_clean
+    debug["gt_normalized"] = gt_clean
+
+    if pred_clean == gt_clean:
+        debug["match_type"] = "exact_string"
+        return True, debug
+
+    if HAS_SYMPY:
+        try:
+            pred_sym = latex2sympy(predicted)
+            gt_sym = latex2sympy(ground_truth)
+            debug["pred_sympy"] = str(pred_sym)
+            debug["gt_sympy"] = str(gt_sym)
+
+            pred_val = float(N(pred_sym))
+            gt_val = float(N(gt_sym))
+            debug["pred_numeric"] = pred_val
+            debug["gt_numeric"] = gt_val
+
+            if abs(pred_val - gt_val) < 1e-6:
+                debug["match_type"] = "numeric_sympy"
+                return True, debug
+        except Exception as exc:
+            debug["numeric_error"] = str(exc)
+
+        try:
+            pred_sym = latex2sympy(predicted)
+            gt_sym = latex2sympy(ground_truth)
+            debug["pred_sympy"] = str(pred_sym)
+            debug["gt_sympy"] = str(gt_sym)
+
+            if simplify(pred_sym - gt_sym) == 0:
+                debug["match_type"] = "symbolic_equiv"
+                return True, debug
+        except Exception as exc:
+            debug["symbolic_error"] = str(exc)
+    else:
+        debug["sympy_available"] = False
+
+    debug["match_type"] = "no_match"
+    return False, debug
 
 
 HINT_PROMPT_TEMPLATE = """You are helping improve a math solver.
@@ -111,6 +189,16 @@ def parse_args() -> argparse.Namespace:
         "--openai-model",
         default="gpt-4.1",
         help="OpenAI model for hint generation (default: gpt-4.1).",
+    )
+    parser.add_argument(
+        "--use-llm-judge",
+        action="store_true",
+        help="Use an OpenAI model to judge correctness instead of local matching.",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default="gpt-4.1",
+        help="OpenAI model for judging correctness (default: gpt-4.1).",
     )
     parser.add_argument(
         "--strong-hints",
@@ -296,7 +384,43 @@ def build_hinted_prompt(problem: str, hint: str) -> List[Dict[str, str]]:
     ]
 
 
-def rerun_with_hint(model, tokenizer, item: Dict[str, Any], hint: str) -> Dict[str, Any]:
+def llm_judge_correctness(
+    client: OpenAI,
+    model: str,
+    problem: str,
+    model_response: str,
+    ground_truth_solution: str,
+) -> tuple[bool, str]:
+    prompt = (
+        "You are a math answer grader. Given a math problem, a model's response, and the "
+        "ground truth solution, determine if the model's final answer is mathematically "
+        "equivalent to the correct answer.\n\n"
+        f"Problem: {problem}\n\n"
+        f"Model's Response: {model_response}\n\n"
+        f"Ground Truth Solution: {ground_truth_solution}\n\n"
+        'Is the model\'s final answer correct? Respond with ONLY "CORRECT" or "INCORRECT" '
+        "followed by a brief explanation."
+    )
+
+    response = client.responses.create(
+        model=model,
+        input=prompt,
+        max_output_tokens=256,
+    )
+    judgment = (response.output_text or "").strip()
+    is_correct_flag = judgment.upper().startswith("CORRECT")
+    return is_correct_flag, judgment
+
+
+def rerun_with_hint(
+    model,
+    tokenizer,
+    item: Dict[str, Any],
+    hint: str,
+    use_llm_judge: bool,
+    judge_model: str,
+    judge_client: Optional[OpenAI],
+) -> Dict[str, Any]:
     messages = build_hinted_prompt(item.get("problem", ""), hint)
     start_time = time.time()
     gen_result = generate_response(model, tokenizer, messages)
@@ -319,7 +443,19 @@ def rerun_with_hint(model, tokenizer, item: Dict[str, Any], hint: str) -> Dict[s
     response_text = gen_result["text"]
     predicted = extract_boxed_answer(response_text)
     ground_truth = extract_ground_truth(item.get("solution", "")) or item.get("ground_truth", "")
-    correct, match_debug = is_correct(predicted, ground_truth)
+    if use_llm_judge:
+        if judge_client is None:
+            raise RuntimeError("LLM judge requested but OpenAI client is not configured.")
+        correct, llm_judgment = llm_judge_correctness(
+            judge_client,
+            judge_model,
+            problem=item.get("problem", ""),
+            model_response=response_text,
+            ground_truth_solution=item.get("solution", ""),
+        )
+        match_debug = {"match_type": "llm_judge", "llm_judgment": llm_judgment}
+    else:
+        correct, match_debug = is_correct(predicted, ground_truth)
 
     return {
         "skipped": False,
@@ -328,6 +464,7 @@ def rerun_with_hint(model, tokenizer, item: Dict[str, Any], hint: str) -> Dict[s
         "ground_truth": ground_truth,
         "correct": correct,
         "match_type": match_debug.get("match_type"),
+        "llm_judgment": match_debug.get("llm_judgment"),
         "input_tokens": gen_result.get("input_tokens"),
         "generated_tokens": gen_result.get("generated_tokens"),
         "generation_time_sec": gen_time,
@@ -346,12 +483,15 @@ def process_file(
     use_solution_hint: bool,
     strong_hints: bool,
     num_hints: int,
+    use_llm_judge: bool,
+    judge_model: str,
 ) -> str:
     data = load_json(input_path)
     results = data.get("results", [])
 
     client: Optional[OpenAI] = None
-    if not mock_hints:
+    needs_openai = (not mock_hints and not use_solution_hint) or use_llm_judge
+    if needs_openai:
         if not HAS_OPENAI:
             raise RuntimeError("openai package not installed. Please install it first.")
 
@@ -403,7 +543,15 @@ def process_file(
         if hint_data.get("error"):
             hint_errors += 1
 
-        rerun = rerun_with_hint(model, tokenizer, item, hint)
+        rerun = rerun_with_hint(
+            model,
+            tokenizer,
+            item,
+            hint,
+            use_llm_judge,
+            judge_model,
+            client,
+        )
         if rerun.get("skipped"):
             skipped += 1
         if rerun.get("correct"):
@@ -465,6 +613,8 @@ def process_file(
             "use_solution_hint": use_solution_hint,
             "strong_hints": strong_hints,
             "num_hints": num_hints,
+            "use_llm_judge": use_llm_judge,
+            "judge_model": judge_model,
             "timestamp": datetime.now().isoformat(),
         },
         "summary": {
@@ -509,6 +659,8 @@ def main() -> None:
             use_solution_hint=args.use_solution_hint,
             strong_hints=args.strong_hints,
             num_hints=args.num_hints,
+            use_llm_judge=args.use_llm_judge,
+            judge_model=args.judge_model,
         )
         output_paths.append(output_path)
 
