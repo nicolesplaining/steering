@@ -288,8 +288,15 @@ def main() -> None:
                 improved_count = 0
 
                 total = len(improved)
+                print(
+                    f"Evaluating {baseline_name} | layers {layers[0]}-{layers[-1]} | α={strength} "
+                    f"({total} examples, progress every {args.progress_every})...",
+                    flush=True
+                )
                 for idx, ex in enumerate(improved, start=1):
                     prompt_text = build_prompt_text(tokenizer, ex.problem, None)
+                    if idx == 1:
+                        print(f"Starting first generation (vanilla)...", flush=True)
 
                     vanilla = generate_with_steering(
                         model=model,
@@ -300,6 +307,8 @@ def main() -> None:
                         start_after_tokens=args.start_after_tokens,
                         max_new_tokens=args.max_new_tokens,
                     )
+                    if idx == 1:
+                        print(f"First vanilla generation done ({len(vanilla.get('text', ''))} chars), starting steered...", flush=True)
                     steered = generate_with_steering(
                         model=model,
                         tokenizer=tokenizer,
