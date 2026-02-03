@@ -17,8 +17,7 @@ dependencies:
     - matplotlib
     - openai
     - peft
-    # For baseline_eval/evaluate_distilled_math --no-llm-judge (symbolic math matching)
     - latex2sympy2
-    # For context_distillation.py with --teacher anthropic (default)
     - anthropic
+    - vllm
 prefix: /opt/anaconda3/envs/steering-env

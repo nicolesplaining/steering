@@ -29,6 +29,7 @@ You can then compare the two JSONs' summary accuracy.
 
 import argparse
 import json
+import os
 import random
 import time
 from datetime import datetime
@@ -98,6 +99,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Use local answer matching instead of OpenAI judge. No API key needed.",
     )
+    parser.add_argument(
+        "--use-vllm",
+        action="store_true",
+        help="Use vLLM for inference (with LoRA). Faster on GPU.",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default="gpt-4o",
+        help="OpenAI model for LLM judge (e.g. gpt-4o, gpt-4o-mini). Default: gpt-4o.",
+    )
     return parser.parse_args()
 
 
@@ -131,14 +142,35 @@ def main() -> None:
     random.shuffle(indices)
     sample_indices = indices[:n_samples]
 
-    # Load base model + tokenizer, then attach LoRA adapter
-    if PeftModel is None:
-        raise ImportError("peft is required to load the LoRA adapter. Install with: pip install peft")
-    base_model, tokenizer = load_model(args.model)
-    print(f"Loading LoRA adapter from {args.adapter_path} ...")
-    model = PeftModel.from_pretrained(base_model, args.adapter_path)
-    model.eval()
-    print(f"LoRA-adapted model loaded on {model.device}")
+    # Load model: vLLM+LoRA or HuggingFace+Peft
+    use_vllm = args.use_vllm
+    lora_request = None
+    if use_vllm:
+        from vllm.lora.request import LoRARequest
+        base_model, tokenizer = load_model(args.model, use_vllm=True, enable_lora=True)
+        lora_request = LoRARequest("distilled_adapter", 1, args.adapter_path)
+        model = base_model
+        print(f"LoRA adapter will be applied per-request: {args.adapter_path}")
+    else:
+        if PeftModel is None:
+            raise ImportError("peft is required to load the LoRA adapter. Install with: pip install peft")
+        adapter_path = os.path.abspath(os.path.expanduser(args.adapter_path))
+        if not os.path.isdir(adapter_path):
+            raise FileNotFoundError(
+                f"Adapter path does not exist: {adapter_path}\n"
+                "Train an adapter first, e.g. with context_distillation.py "
+                "(build_dataset_from_hint_outputs + finetune_student) or use --adapter-path /path/to/your/adapter"
+            )
+        config_path = os.path.join(adapter_path, "adapter_config.json")
+        if not os.path.isfile(config_path):
+            raise FileNotFoundError(
+                f"Not a valid PEFT adapter directory (no adapter_config.json): {adapter_path}"
+            )
+        base_model, tokenizer = load_model(args.model)
+        print(f"Loading LoRA adapter from {adapter_path} ...")
+        model = PeftModel.from_pretrained(base_model, adapter_path, local_files_only=True)
+        model.eval()
+        print(f"LoRA-adapted model loaded on {model.device}")
 
     judge_client = None if args.no_llm_judge else OpenAI()
 
@@ -172,6 +204,8 @@ def main() -> None:
             tokenizer,
             messages,
             max_new_tokens=args.max_new_tokens,
+            use_vllm=use_vllm,
+            lora_request=lora_request,
         )
         gen_time = time.time() - start_time
 
@@ -205,6 +239,7 @@ def main() -> None:
                 model_response=response,
                 ground_truth_solution=example["solution"],
                 seed=seed,
+                model=args.judge_model,
             )
             match_type = "llm_judge"
         else:
@@ -281,4 +316,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

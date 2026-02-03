@@ -98,8 +98,9 @@ def llm_judge_correctness(
     model_response: str,
     ground_truth_solution: str,
     seed: int,
+    model: str = "gpt-4o",
 ) -> tuple[bool, str]:
-    """Use GPT-5 to judge if the model's answer is correct."""
+    """Use an OpenAI model to judge if the model's answer is correct."""
     prompt = (
         "You are a math answer grader. Given a math problem, a model's response, and the "
         "ground truth solution, determine if the model's final answer is mathematically "
@@ -112,7 +113,7 @@ def llm_judge_correctness(
     )
 
     response = client.chat.completions.create(
-        model="gpt-5",
+        model=model,
         messages=[{"role": "user", "content": prompt}],
         seed=seed,
     )
@@ -126,11 +127,21 @@ def llm_judge_correctness(
 # MODEL
 # ============================================================================
 
-def load_model(model_name: str):
-    """Load the math model."""
+def load_model(model_name: str, use_vllm: bool = False, enable_lora: bool = False):
+    """Load the math model (HuggingFace or vLLM). enable_lora only applies when use_vllm=True."""
     print(f"Loading {model_name}...")
-    
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+
+    if use_vllm:
+        from vllm import LLM
+        model = LLM(
+            model=model_name,
+            trust_remote_code=True,
+            enable_lora=enable_lora,
+        )
+        print("Model loaded with vLLM" + (" (LoRA enabled)" if enable_lora else ""))
+        return model, tokenizer
+
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
@@ -138,7 +149,6 @@ def load_model(model_name: str):
         trust_remote_code=True
     )
     model.eval()
-    
     print(f"Model loaded on {model.device}")
     return model, tokenizer
 
@@ -146,14 +156,57 @@ def load_model(model_name: str):
 MAX_CONTEXT_LENGTH = 4096  # Qwen2.5-Math context limit
 
 
-def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 4096) -> dict:
-    """Generate response from the model."""
+def generate_response(
+    model,
+    tokenizer,
+    messages: list,
+    max_new_tokens: int = 4096,
+    use_vllm: bool = False,
+    lora_request=None,
+) -> dict:
+    """Generate response (HuggingFace or vLLM). lora_request: vllm LoRARequest when use_vllm+LoRA."""
+    if use_vllm:
+        from vllm import SamplingParams
+        prompt_text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        input_tokens = len(tokenizer.encode(prompt_text, add_special_tokens=True))
+        if input_tokens > MAX_CONTEXT_LENGTH:
+            return {
+                "text": "",
+                "input_tokens": input_tokens,
+                "generated_tokens": 0,
+                "skipped": True,
+                "skip_reason": f"input_tokens ({input_tokens}) > MAX_CONTEXT_LENGTH ({MAX_CONTEXT_LENGTH})",
+            }
+        capped = min(max_new_tokens, MAX_CONTEXT_LENGTH - input_tokens)
+        if capped <= 0:
+            return {
+                "text": "",
+                "input_tokens": input_tokens,
+                "generated_tokens": 0,
+                "skipped": True,
+                "skip_reason": f"no remaining tokens (input_tokens={input_tokens})",
+            }
+        sampling_params = SamplingParams(
+            max_tokens=capped,
+            temperature=0.6,
+            top_p=0.95,
+        )
+        outputs = model.generate([prompt_text], sampling_params)
+        out = outputs[0]
+        response = out.outputs[0].text
+        num_generated = len(out.outputs[0].token_ids)
+        return {
+            "text": response,
+            "input_tokens": input_tokens,
+            "generated_tokens": num_generated,
+            "skipped": False,
+        }
+    # HuggingFace path
     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
-    
     input_tokens = inputs.input_ids.shape[1]
-    
-    # Check context length
     if input_tokens > MAX_CONTEXT_LENGTH:
         return {
             "text": "",
@@ -162,8 +215,6 @@ def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 40
             "skipped": True,
             "skip_reason": f"input_tokens ({input_tokens}) > MAX_CONTEXT_LENGTH ({MAX_CONTEXT_LENGTH})",
         }
-    
-    # Cap generation so total tokens stay within the model context limit.
     remaining_tokens = MAX_CONTEXT_LENGTH - input_tokens
     if remaining_tokens <= 0:
         return {
@@ -174,7 +225,6 @@ def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 40
             "skip_reason": f"no remaining tokens (input_tokens={input_tokens})",
         }
     capped_max_new_tokens = min(max_new_tokens, remaining_tokens)
-
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
@@ -185,12 +235,9 @@ def generate_response(model, tokenizer, messages: list, max_new_tokens: int = 40
             top_k=20,
             pad_token_id=tokenizer.eos_token_id
         )
-    
     output_tokens = outputs[0].shape[0]
     generated_tokens = output_tokens - input_tokens
-    
     response = tokenizer.decode(outputs[0][input_tokens:], skip_special_tokens=True)
-    
     return {
         "text": response,
         "input_tokens": input_tokens,
@@ -252,6 +299,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Use local answer matching (normalize + sympy) instead of OpenAI judge. No API key needed.",
     )
+    parser.add_argument(
+        "--use-vllm",
+        action="store_true",
+        help="Use vLLM for inference (faster, especially on GPU).",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default="gpt-4o",
+        help="OpenAI model for LLM judge (e.g. gpt-4o, gpt-4o-mini, gpt-4-turbo). Default: gpt-4o.",
+    )
     return parser.parse_args()
 
 
@@ -282,7 +339,7 @@ def main():
     sample_indices = indices[:n_samples]
     
     # Load model
-    model, tokenizer = load_model(args.model)
+    model, tokenizer = load_model(args.model, use_vllm=args.use_vllm)
     judge_client = None
     if not args.no_llm_judge:
         judge_client = OpenAI()
@@ -316,6 +373,7 @@ def main():
             tokenizer,
             messages,
             max_new_tokens=args.max_new_tokens,
+            use_vllm=args.use_vllm,
         )
         gen_time = time.time() - start_time
         
@@ -347,6 +405,7 @@ def main():
                 model_response=response,
                 ground_truth_solution=example['solution'],
                 seed=seed,
+                model=args.judge_model,
             )
             match_type = "llm_judge"
         else:
@@ -450,4 +509,3 @@ def _save_results(
 
 if __name__ == "__main__":
     main()
-
