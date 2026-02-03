@@ -1,0 +1,55 @@
+{
+  "config": {
+    "input": "/home/ubuntu/steering/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints.json",
+    "model": "Qwen/Qwen2.5-Math-1.5B-Instruct",
+    "layer_sets": [
+      [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ]
+    ],
+    "strengths": [
+      1.0
+    ],
+    "num_examples": 85,
+    "start_after_tokens": 0,
+    "max_new_tokens": 512,
+    "timestamp": "2026-02-03T08:16:12.716103"
+  },
+  "results": [
+    {
+      "baseline": "hinted_minus_empty",
+      "layers": [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "strength": 1.0,
+      "total": 85,
+      "vanilla_correct": 4,
+      "steered_correct": 4,
+      "vanilla_accuracy": 0.047058823529411764,
+      "steered_accuracy": 0.047058823529411764,
+      "improved": 3
+    }
+  ]
+}
