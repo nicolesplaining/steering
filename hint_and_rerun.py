@@ -408,9 +408,30 @@ def generate_hint(
     return result
 
 
+def _format_behaviors_as_lines(hint: str) -> str:
+    """Convert JSON (or ```json ... ```) behaviors to 'key: value' lines."""
+    text = hint.strip()
+    # Strip ```json and ``` if present
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].lower().startswith("```json"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines)
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, dict):
+            return "\n".join(f"{k}: {v}" for k, v in obj.items())
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return hint
+
+
 def build_hinted_prompt(
     problem: str, hint: str, strong_behaviors: bool = False
 ) -> List[Dict[str, str]]:
+    behaviors_block = _format_behaviors_as_lines(hint)
     system_prompt = "You are a helpful math assistant."
     if strong_behaviors:
         user_content = (
@@ -419,7 +440,7 @@ def build_hinted_prompt(
             "It can be a strategy, a trick, or a technique. It can also be a general rule "
             "or a common sense principle. The behavior is not a solution to the problem, "
             "but it can be used to solve the problem. Here is a list of behaviors:\n"
-            f"{hint}\n\n"
+            f"{behaviors_block}\n\n"
             "You must apply the behaviors above. In your reasoning, explicitly reference the behavior "
             "names when you use them (e.g., behavior_x). Avoid vague explanations; show the key "
             "intermediate step each behavior enables. Please reason step by step and put the final answer "
@@ -432,7 +453,7 @@ def build_hinted_prompt(
             "It can be a strategy, a trick, or a technique. It can also be a general rule "
             "or a common sense principle. The behavior is not a solution to the problem, "
             "but it can be used to solve the problem. Here is a list of behaviors:\n"
-            f"{hint}\n\n"
+            f"{behaviors_block}\n\n"
             "Now, solve the following math problem efficiently and clearly. Use the behaviors above "
             "to solve the problem. In your reasoning, when you use a behavior explicitly refer to the "
             "behaviors when you use them. Please reason step by step and put the final answer in \\boxed{}."
