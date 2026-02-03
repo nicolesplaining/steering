@@ -104,72 +104,43 @@ def is_correct(predicted: str, ground_truth: str) -> tuple[bool, Dict]:
     return False, debug
 
 
-HINT_PROMPT_TEMPLATE = """You are helping improve a math solver.
+REFLECTION_PROMPT_TEMPLATE = """Here is the definition of a behavior:
+•A behavior is a note or skill to keep in mind while solving math problems.
+•It can be a strategy, a trick, or a technique.
+•It can also be a general rule or a common sense principle.
+•A behavior is not a solution to the problem, but it can be used to solve the problem.
 
-Given the problem and the model's incorrect attempt, write a hint that nudges
-the solver toward the right method. The hint should:
-- be concise but strong (2-5 sentences)
-- point to the exact method or equation to use, and the likely mistake
-- include one concrete intermediate step or relationship (no final result)
-- avoid giving the final answer or final numeric result
-- avoid copying the ground-truth answer verbatim
+For example - if the problem is "Find the area of a circle with radius 4", one useful behaviour could be {{"behavior_area_of_circle": area of a circle is pi*r^2}}.
+
+Given a problem and the corresponding solution, reflect and critique the solutions along the following dimensions:
+1. Correctness Analysis: Is the answer mathematically correct? Are there calculation errors? Is the reasoning logically sound? Are all steps properly justified? What specific mistakes were made?
+2. Missing Behaviors Analysis: What behaviors should have been used but weren't? Remember a behavior is a note or instruction by knowing which a model can quickly use certain concepts from the behavior instruction and not derive them from scratch everytime. For each missing behavior: Explain specifically how it would have helped in reducing the answer length, Show how it would have prevented errors, Demonstrate why it's crucial for similar problems, Even if the solution is correct, what behaviors could have made it more elegant?
+3. New Behavior Suggestions: Suggest specific new behaviors that will help with similar problems. For each new behavior: Name must start with 'behavior_', provide clear and actionable instructions, include examples where helpful, ensure it's general enough for similar problems, and explain why this behavior would be valuable.
 
 Problem:
 {problem}
 
-Model attempt (incorrect):
+Model attempt:
 {response}
 
 Model predicted answer:
 {predicted}
 
-Match type (if provided):
-{match_type}
-
-Ground-truth answer (do NOT reveal this):
+Ground-truth answer (do NOT reveal this in behaviors):
 {ground_truth}
 
 Ground-truth reasoning (for your reference; do NOT copy verbatim):
 {solution}
+"""
 
-Write ONLY the hint:"""
+BEHAVIOR_PROMPT_TEMPLATE = """{reflection_prompt}
 
-STRONG_HINTS_PROMPT_TEMPLATE = """You are helping improve a math solver.
+<reflection>
+{reflection}
+</reflection>
 
-Given the problem and the model's incorrect attempt, write STRONG hints that
-explicitly diagnose the mistake and prescribe the exact fix. Each hint should:
-- be concise but strong (2-4 sentences)
-- state a specific error to avoid (what not to do)
-- name the exact theorem/technique to use and how to apply it
-- consider why the model originally got the question wrong, and use that to generate a hint that will best aid it
-- include one concrete intermediate step or relationship (no final result)
-- avoid giving the final answer or final numeric result
-- avoid copying the ground-truth answer verbatim
-
-Return {num_hints} concise hints, each 2-4 sentences, labeled as:
-Hint 1: ...
-Hint 2: ...
-(etc.)
-
-Problem:
-{problem}
-
-Model attempt (incorrect):
-{response}
-
-Model predicted answer:
-{predicted}
-
-Match type (if provided):
-{match_type}
-
-Ground-truth answer (do NOT reveal this):
-{ground_truth}
-
-Ground-truth reasoning (for your reference; do NOT copy verbatim):
-{solution}
-
-Write ONLY the hints:"""
+Now, given this reflection generate a list of behaviors and corresponding instructions/ explanations in json format. Each behavior should be a single line, and the format is "behavior_[name]: [description]". The list should be in json format, and each behavior should be a key-value pair, where the key is the behavior name and the value is the description.
+"""
 
 
 def parse_args() -> argparse.Namespace:
@@ -270,41 +241,26 @@ def write_json(path: str, data: Dict[str, Any]) -> None:
         handle.write("\n")
 
 
-def build_hint_prompt(item: Dict[str, Any], num_hints: int = 1) -> str:
+def build_reflection_prompt(item: Dict[str, Any]) -> str:
     problem = item.get("problem", "")
     response = item.get("response", "")
     predicted = item.get("predicted", "")
     ground_truth = item.get("ground_truth", "")
     match_type = item.get("match_type", "")
     solution = item.get("solution", "")
-    prompt = HINT_PROMPT_TEMPLATE.format(
+    return REFLECTION_PROMPT_TEMPLATE.format(
         problem=problem,
         response=response,
         predicted=predicted,
-        match_type=match_type,
         ground_truth=ground_truth,
         solution=solution,
     )
-    if num_hints and num_hints > 1:
-        prompt += f"\n\nReturn {num_hints} hints labeled as:\nHint 1: ...\nHint 2: ...\n(etc.)"
-    return prompt
 
 
-def build_strong_hint_prompt(item: Dict[str, Any], num_hints: int) -> str:
-    problem = item.get("problem", "")
-    response = item.get("response", "")
-    predicted = item.get("predicted", "")
-    ground_truth = item.get("ground_truth", "")
-    match_type = item.get("match_type", "")
-    solution = item.get("solution", "")
-    return STRONG_HINTS_PROMPT_TEMPLATE.format(
-        problem=problem,
-        response=response,
-        predicted=predicted,
-        match_type=match_type,
-        ground_truth=ground_truth,
-        solution=solution,
-        num_hints=max(1, num_hints),
+def build_behavior_prompt(reflection_prompt: str, reflection_text: str) -> str:
+    return BEHAVIOR_PROMPT_TEMPLATE.format(
+        reflection_prompt=reflection_prompt,
+        reflection=reflection_text,
     )
 
 
@@ -347,11 +303,7 @@ def generate_hint(
     strong_hints: bool = False,
     num_hints: int = 1,
 ) -> Dict[str, Any]:
-    prompt = (
-        build_strong_hint_prompt(item, num_hints)
-        if strong_hints
-        else build_hint_prompt(item, num_hints)
-    )
+    reflection_prompt = build_reflection_prompt(item)
     result: Dict[str, Any] = {
         "hint": "",
         "hints": [],
@@ -360,24 +312,28 @@ def generate_hint(
         "openai_usage": None,
     }
     try:
-        response = client.responses.create(
+        reflection_response = client.responses.create(
             model=model,
-            input=prompt,
+            input=reflection_prompt,
             max_output_tokens=512,
         )
-        hint_text = (response.output_text or "").strip()
-        hints = parse_hints(hint_text, num_hints)
-        result["hints"] = hints
-        if hints:
-            combined = "\n".join([f"Hint {idx + 1}: {hint}" for idx, hint in enumerate(hints)])
-        else:
-            combined = hint_text
-        result["hint"] = combined
-        if hasattr(response, "usage") and response.usage is not None:
+        reflection_text = (reflection_response.output_text or "").strip()
+
+        behavior_prompt = build_behavior_prompt(reflection_prompt, reflection_text)
+        behavior_response = client.responses.create(
+            model=model,
+            input=behavior_prompt,
+            max_output_tokens=512,
+        )
+        behavior_text = (behavior_response.output_text or "").strip()
+
+        result["hint"] = behavior_text
+        result["hints"] = [behavior_text] if behavior_text else []
+        if hasattr(behavior_response, "usage") and behavior_response.usage is not None:
             result["openai_usage"] = {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-                "total_tokens": response.usage.total_tokens,
+                "input_tokens": behavior_response.usage.input_tokens,
+                "output_tokens": behavior_response.usage.output_tokens,
+                "total_tokens": behavior_response.usage.total_tokens,
             }
     except Exception as exc:
         result["error"] = f"{type(exc).__name__}: {exc}"
@@ -388,8 +344,14 @@ def build_hinted_prompt(problem: str, hint: str) -> List[Dict[str, str]]:
     system_prompt = "You are a helpful math assistant."
     user_content = (
         f"Problem: {problem}\n\n"
-        f"Hint: {hint}\n\n"
-        "Solve step by step. Final answer in \\boxed{}."
+        "A behavior is a note or skill to keep in mind while solving math problems. "
+        "It can be a strategy, a trick, or a technique. It can also be a general rule "
+        "or a common sense principle. The behavior is not a solution to the problem, "
+        "but it can be used to solve the problem. Here is a list of behaviors:\n"
+        f"{hint}\n\n"
+        "Now, solve the following math problem efficiently and clearly. Use the behaviors above "
+        "to solve the problem. In your reasoning, when you use a behavior explicitly refer to the "
+        "behaviors when you use them. Please reason step by step and put the final answer in \\boxed{}."
     )
     return [
         {"role": "system", "content": system_prompt},
