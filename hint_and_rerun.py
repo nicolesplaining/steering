@@ -133,6 +133,41 @@ Ground-truth reasoning (for your reference; do NOT copy verbatim):
 {solution}
 """
 
+STRONG_REFLECTION_PROMPT_TEMPLATE = """Here is the definition of a behavior:
+•A behavior is a note or skill to keep in mind while solving math problems.
+•It can be a strategy, a trick, or a technique.
+•It can also be a general rule or a common sense principle.
+•A behavior is not a solution to the problem, but it can be used to solve the problem.
+
+For example - if the problem is "Find the area of a circle with radius 4", one useful behaviour could be {{"behavior_area_of_circle": area of a circle is pi*r^2}}.
+
+Given a problem and the corresponding solution, reflect and critique the solutions along the following dimensions:
+1. Correctness Analysis: Is the answer mathematically correct? Are there calculation errors? Is the reasoning logically sound? Are all steps properly justified? What specific mistakes were made?
+2. Missing Behaviors Analysis: What behaviors should have been used but weren't? Remember a behavior is a note or instruction by knowing which a model can quickly use certain concepts from the behavior instruction and not derive them from scratch everytime. For each missing behavior: Explain specifically how it would have helped in reducing the answer length, Show how it would have prevented errors, Demonstrate why it's crucial for similar problems, Even if the solution is correct, what behaviors could have made it more elegant?
+3. New Behavior Suggestions: Suggest specific new behaviors that will help with similar problems. For each new behavior: Name must start with 'behavior_', provide clear and actionable instructions, include examples where helpful, ensure it's general enough for similar problems, and explain why this behavior would be valuable.
+
+To make your behavior suggestions stronger, you can:
+- explicitly diagnose mistakes and prescribe the exact fix
+- name the exact theorem/technique to use and how to apply it
+- state a specific error to avoid (what not to do)
+- include one concrete intermediate step or relationship (no final result)
+
+Problem:
+{problem}
+
+Model attempt:
+{response}
+
+Model predicted answer:
+{predicted}
+
+Ground-truth answer (do NOT reveal this in behaviors):
+{ground_truth}
+
+Ground-truth reasoning (for your reference; do NOT copy verbatim):
+{solution}
+"""
+
 BEHAVIOR_PROMPT_TEMPLATE = """{reflection_prompt}
 
 <reflection>
@@ -142,6 +177,20 @@ BEHAVIOR_PROMPT_TEMPLATE = """{reflection_prompt}
 Now, given this reflection generate a list of behaviors and corresponding instructions/ explanations in json format. Each behavior should be a single line, and the format is "behavior_[name]: [description]". The list should be in json format, and each behavior should be a key-value pair, where the key is the behavior name and the value is the description.
 """
 
+STRONG_BEHAVIOR_PROMPT_TEMPLATE = """{reflection_prompt}
+
+<reflection>
+{reflection}
+</reflection>
+
+Now, given this reflection generate a list of behaviors and corresponding instructions/ explanations in json format. Requirements:
+- include only behaviors that directly address the diagnosed mistakes or missing skills
+- each behavior must be actionable and specific (not vague)
+- include at least one concrete intermediate step or relationship in each behavior
+- avoid giving the final numeric answer
+
+The format of each behavior is "behavior_[name]: [description]". The list should be in json format, and each behavior should be a key-value pair, where the key is the behavior name and the value is the description.
+"""
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -157,6 +206,16 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         default=".",
         help="Directory for output JSONs.",
+    )
+    parser.add_argument(
+        "--run-id",
+        default="",
+        help="Optional run id for output subfolder. If empty and --auto-run-dir is set, a timestamp is used.",
+    )
+    parser.add_argument(
+        "--auto-run-dir",
+        action="store_true",
+        help="Create a run_<id> subfolder under --output-dir to avoid overwrites.",
     )
     parser.add_argument(
         "--openai-model",
@@ -177,6 +236,11 @@ def parse_args() -> argparse.Namespace:
         "--strong-hints",
         action="store_true",
         help="Use stronger, multi-hint instructions for OpenAI hints.",
+    )
+    parser.add_argument(
+        "--strong-behaviors",
+        action="store_true",
+        help="Use stronger reflection/behavior prompts for behavior hints.",
     )
     parser.add_argument(
         "--num-hints",
@@ -241,14 +305,15 @@ def write_json(path: str, data: Dict[str, Any]) -> None:
         handle.write("\n")
 
 
-def build_reflection_prompt(item: Dict[str, Any]) -> str:
+def build_reflection_prompt(item: Dict[str, Any], strong_behaviors: bool = False) -> str:
     problem = item.get("problem", "")
     response = item.get("response", "")
     predicted = item.get("predicted", "")
     ground_truth = item.get("ground_truth", "")
     match_type = item.get("match_type", "")
     solution = item.get("solution", "")
-    return REFLECTION_PROMPT_TEMPLATE.format(
+    template = STRONG_REFLECTION_PROMPT_TEMPLATE if strong_behaviors else REFLECTION_PROMPT_TEMPLATE
+    return template.format(
         problem=problem,
         response=response,
         predicted=predicted,
@@ -257,11 +322,11 @@ def build_reflection_prompt(item: Dict[str, Any]) -> str:
     )
 
 
-def build_behavior_prompt(reflection_prompt: str, reflection_text: str) -> str:
-    return BEHAVIOR_PROMPT_TEMPLATE.format(
-        reflection_prompt=reflection_prompt,
-        reflection=reflection_text,
-    )
+def build_behavior_prompt(
+    reflection_prompt: str, reflection_text: str, strong_behaviors: bool = False
+) -> str:
+    template = STRONG_BEHAVIOR_PROMPT_TEMPLATE if strong_behaviors else BEHAVIOR_PROMPT_TEMPLATE
+    return template.format(reflection_prompt=reflection_prompt, reflection=reflection_text)
 
 
 def parse_hints(text: str, num_hints: int) -> List[str]:
@@ -302,8 +367,9 @@ def generate_hint(
     item: Dict[str, Any],
     strong_hints: bool = False,
     num_hints: int = 1,
+    strong_behaviors: bool = False,
 ) -> Dict[str, Any]:
-    reflection_prompt = build_reflection_prompt(item)
+    reflection_prompt = build_reflection_prompt(item, strong_behaviors)
     result: Dict[str, Any] = {
         "hint": "",
         "hints": [],
@@ -319,7 +385,9 @@ def generate_hint(
         )
         reflection_text = (reflection_response.output_text or "").strip()
 
-        behavior_prompt = build_behavior_prompt(reflection_prompt, reflection_text)
+        behavior_prompt = build_behavior_prompt(
+            reflection_prompt, reflection_text, strong_behaviors
+        )
         behavior_response = client.responses.create(
             model=model,
             input=behavior_prompt,
@@ -340,19 +408,35 @@ def generate_hint(
     return result
 
 
-def build_hinted_prompt(problem: str, hint: str) -> List[Dict[str, str]]:
+def build_hinted_prompt(
+    problem: str, hint: str, strong_behaviors: bool = False
+) -> List[Dict[str, str]]:
     system_prompt = "You are a helpful math assistant."
-    user_content = (
-        f"Problem: {problem}\n\n"
-        "A behavior is a note or skill to keep in mind while solving math problems. "
-        "It can be a strategy, a trick, or a technique. It can also be a general rule "
-        "or a common sense principle. The behavior is not a solution to the problem, "
-        "but it can be used to solve the problem. Here is a list of behaviors:\n"
-        f"{hint}\n\n"
-        "Now, solve the following math problem efficiently and clearly. Use the behaviors above "
-        "to solve the problem. In your reasoning, when you use a behavior explicitly refer to the "
-        "behaviors when you use them. Please reason step by step and put the final answer in \\boxed{}."
-    )
+    if strong_behaviors:
+        user_content = (
+            f"Problem: {problem}\n\n"
+            "A behavior is a note or skill to keep in mind while solving math problems. "
+            "It can be a strategy, a trick, or a technique. It can also be a general rule "
+            "or a common sense principle. The behavior is not a solution to the problem, "
+            "but it can be used to solve the problem. Here is a list of behaviors:\n"
+            f"{hint}\n\n"
+            "You must apply the behaviors above. In your reasoning, explicitly reference the behavior "
+            "names when you use them (e.g., behavior_x). Avoid vague explanations; show the key "
+            "intermediate step each behavior enables. Please reason step by step and put the final answer "
+            "in \\boxed{}."
+        )
+    else:
+        user_content = (
+            f"Problem: {problem}\n\n"
+            "A behavior is a note or skill to keep in mind while solving math problems. "
+            "It can be a strategy, a trick, or a technique. It can also be a general rule "
+            "or a common sense principle. The behavior is not a solution to the problem, "
+            "but it can be used to solve the problem. Here is a list of behaviors:\n"
+            f"{hint}\n\n"
+            "Now, solve the following math problem efficiently and clearly. Use the behaviors above "
+            "to solve the problem. In your reasoning, when you use a behavior explicitly refer to the "
+            "behaviors when you use them. Please reason step by step and put the final answer in \\boxed{}."
+        )
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
@@ -395,8 +479,9 @@ def rerun_with_hint(
     use_llm_judge: bool,
     judge_model: str,
     judge_client: Optional[OpenAI],
+    strong_behaviors: bool,
 ) -> Dict[str, Any]:
-    messages = build_hinted_prompt(item.get("problem", ""), hint)
+    messages = build_hinted_prompt(item.get("problem", ""), hint, strong_behaviors)
     start_time = time.time()
     gen_result = generate_response(model, tokenizer, messages)
     gen_time = time.time() - start_time
@@ -458,6 +543,7 @@ def process_file(
     use_solution_hint: bool,
     strong_hints: bool,
     num_hints: int,
+    strong_behaviors: bool,
     use_llm_judge: bool,
     judge_model: str,
     log_every: int,
@@ -514,14 +600,23 @@ def process_file(
                 "openai_usage": None,
             }
         else:
-            hint_data = generate_hint(client, openai_model, item, strong_hints, num_hints)
+            hint_data = generate_hint(
+                client,
+                openai_model,
+                item,
+                strong_hints,
+                num_hints,
+                strong_behaviors,
+            )
         hint = hint_data.get("hint", "")
         hints_list = hint_data.get("hints", [])
         if hint_data.get("error"):
             hint_errors += 1
 
         if log_prompt:
-            messages = build_hinted_prompt(item.get("problem", ""), hint)
+            messages = build_hinted_prompt(
+                item.get("problem", ""), hint, strong_behaviors
+            )
             print(
                 "\n".join(
                     [
@@ -545,6 +640,7 @@ def process_file(
             use_llm_judge,
             judge_model,
             client,
+            strong_behaviors,
         )
         if rerun.get("skipped"):
             skipped += 1
@@ -616,6 +712,7 @@ def process_file(
             "use_solution_hint": use_solution_hint,
             "strong_hints": strong_hints,
             "num_hints": num_hints,
+            "strong_behaviors": strong_behaviors,
             "use_llm_judge": use_llm_judge,
             "judge_model": judge_model,
             "timestamp": datetime.now().isoformat(),
@@ -648,11 +745,17 @@ def main() -> None:
             "baseline_eval_wrong_geometry.json",
         ]
 
+    output_dir = args.output_dir
+    if args.auto_run_dir or args.run_id:
+        run_id = args.run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.join(output_dir, f"run_{run_id}")
+        os.makedirs(output_dir, exist_ok=True)
+
     output_paths = []
     for input_path in args.input:
         output_path = process_file(
             input_path=input_path,
-            output_dir=args.output_dir,
+            output_dir=output_dir,
             openai_model=args.openai_model,
             qwen_model=args.qwen_model,
             sleep_s=args.sleep,
@@ -662,6 +765,7 @@ def main() -> None:
             use_solution_hint=args.use_solution_hint,
             strong_hints=args.strong_hints,
             num_hints=args.num_hints,
+            strong_behaviors=args.strong_behaviors,
             use_llm_judge=args.use_llm_judge,
             judge_model=args.judge_model,
             log_every=args.log_every,
