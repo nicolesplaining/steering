@@ -60,6 +60,38 @@ def extract_ground_truth(solution: str) -> str:
     return ""
 
 
+def _normalize_answer(s: str) -> str:
+    s = s.strip().lower()
+    s = re.sub(r"\\text\{([^}]*)\}", r"\1", s)
+    s = s.replace(" ", "").replace(",", "")
+    return s
+
+
+def _is_correct_local(predicted: str, ground_truth: str) -> tuple[bool, str]:
+    """Local matching: normalize + optional sympy. Returns (correct, match_type)."""
+    if not predicted:
+        return False, "empty_prediction"
+    if not ground_truth:
+        return False, "empty_ground_truth"
+    pred_clean = _normalize_answer(predicted)
+    gt_clean = _normalize_answer(ground_truth)
+    if pred_clean == gt_clean:
+        return True, "exact_string"
+    try:
+        from latex2sympy2 import latex2sympy
+        from sympy import N, simplify
+
+        pred_sym = latex2sympy(predicted)
+        gt_sym = latex2sympy(ground_truth)
+        if abs(float(N(pred_sym)) - float(N(gt_sym))) < 1e-6:
+            return True, "numeric_sympy"
+        if simplify(pred_sym - gt_sym) == 0:
+            return True, "symbolic_equiv"
+    except Exception:
+        pass
+    return False, "no_match"
+
+
 def llm_judge_correctness(
     client: OpenAI,
     problem: str,
@@ -215,6 +247,11 @@ def _parse_args() -> argparse.Namespace:
         default=8192,
         help="Maximum number of tokens to generate.",
     )
+    parser.add_argument(
+        "--no-llm-judge",
+        action="store_true",
+        help="Use local answer matching (normalize + sympy) instead of OpenAI judge. No API key needed.",
+    )
     return parser.parse_args()
 
 
@@ -246,7 +283,9 @@ def main():
     
     # Load model
     model, tokenizer = load_model(args.model)
-    judge_client = OpenAI()
+    judge_client = None
+    if not args.no_llm_judge:
+        judge_client = OpenAI()
     
     # Run evaluation
     results = []
@@ -301,13 +340,18 @@ def main():
         predicted = extract_boxed_answer(response)
         ground_truth = extract_ground_truth(example['solution'])
 
-        correct, llm_judgment = llm_judge_correctness(
-            judge_client,
-            problem=problem,
-            model_response=response,
-            ground_truth_solution=example['solution'],
-            seed=seed,
-        )
+        if judge_client is not None:
+            correct, llm_judgment = llm_judge_correctness(
+                judge_client,
+                problem=problem,
+                model_response=response,
+                ground_truth_solution=example['solution'],
+                seed=seed,
+            )
+            match_type = "llm_judge"
+        else:
+            correct, match_type = _is_correct_local(predicted, ground_truth)
+            llm_judgment = None
         if correct:
             correct_count += 1
         
@@ -332,7 +376,7 @@ def main():
             "predicted": predicted,
             "ground_truth": ground_truth,
             "correct": correct,
-            "match_type": "llm_judge",
+            "match_type": match_type,
             "llm_judgment": llm_judgment,
             "input_tokens": gen_result["input_tokens"],
             "generated_tokens": gen_result["generated_tokens"],

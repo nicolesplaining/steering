@@ -37,7 +37,11 @@ import numpy as np
 import torch
 from datasets import load_dataset
 from openai import OpenAI
-from peft import PeftModel
+
+try:
+    from peft import PeftModel
+except ImportError:
+    PeftModel = None  # optional; script will fail later if adapter is used
 
 from baseline_eval import (
     extract_boxed_answer,
@@ -45,6 +49,7 @@ from baseline_eval import (
     generate_response,
     load_model,
     llm_judge_correctness,
+    _is_correct_local,
     _set_seeds,
     _save_results,
 )
@@ -88,6 +93,11 @@ def _parse_args() -> argparse.Namespace:
         default=8192,
         help="Maximum number of tokens to generate.",
     )
+    parser.add_argument(
+        "--no-llm-judge",
+        action="store_true",
+        help="Use local answer matching instead of OpenAI judge. No API key needed.",
+    )
     return parser.parse_args()
 
 
@@ -122,13 +132,15 @@ def main() -> None:
     sample_indices = indices[:n_samples]
 
     # Load base model + tokenizer, then attach LoRA adapter
+    if PeftModel is None:
+        raise ImportError("peft is required to load the LoRA adapter. Install with: pip install peft")
     base_model, tokenizer = load_model(args.model)
     print(f"Loading LoRA adapter from {args.adapter_path} ...")
     model = PeftModel.from_pretrained(base_model, args.adapter_path)
     model.eval()
     print(f"LoRA-adapted model loaded on {model.device}")
 
-    judge_client = OpenAI()
+    judge_client = None if args.no_llm_judge else OpenAI()
 
     results = []
     correct_count = 0
@@ -186,13 +198,18 @@ def main() -> None:
         predicted = extract_boxed_answer(response)
         ground_truth = extract_ground_truth(example["solution"])
 
-        correct, llm_judgment = llm_judge_correctness(
-            judge_client,
-            problem=problem,
-            model_response=response,
-            ground_truth_solution=example["solution"],
-            seed=seed,
-        )
+        if judge_client is not None:
+            correct, llm_judgment = llm_judge_correctness(
+                judge_client,
+                problem=problem,
+                model_response=response,
+                ground_truth_solution=example["solution"],
+                seed=seed,
+            )
+            match_type = "llm_judge"
+        else:
+            correct, match_type = _is_correct_local(predicted, ground_truth)
+            llm_judgment = None
         if correct:
             correct_count += 1
 
@@ -218,7 +235,7 @@ def main() -> None:
                 "predicted": predicted,
                 "ground_truth": ground_truth,
                 "correct": correct,
-                "match_type": "llm_judge",
+                "match_type": match_type,
                 "llm_judgment": llm_judgment,
                 "input_tokens": gen_result["input_tokens"],
                 "generated_tokens": gen_result["generated_tokens"],

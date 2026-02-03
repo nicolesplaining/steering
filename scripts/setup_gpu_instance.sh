@@ -20,6 +20,8 @@ cd "$REPO_ROOT"
 # --- Install Miniconda if not present ---
 if command -v conda &>/dev/null; then
   echo "==> conda already installed: $(conda --version)"
+elif [[ -d "$MINICONDA_DIR" ]]; then
+  echo "==> Miniconda already installed at $MINICONDA_DIR (not in PATH)"
 else
   echo "==> Installing Miniconda into $MINICONDA_DIR ..."
   if [[ ! -f "$INSTALLER" ]]; then
