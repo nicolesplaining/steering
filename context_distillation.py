@@ -576,13 +576,20 @@ def build_dataset_from_hint_outputs(
     paths: list[str],
     *,
     require_improved_only: bool = True,
+    metacognitive_only: bool = True,
 ) -> list[dict]:
     """
     Build a distillation dataset directly from one or more *_with_hints.json files
     produced by hint_and_rerun.py.
 
+    If metacognitive_only is True (default), only files from the metacognitive
+    approach (behavior handbooks) are used: config.mock_hints and
+    config.use_solution_hint must both be false. Files with mock hints or
+    solution hints are skipped.
+
     Each JSON file is expected to have the shape:
         {
+          "config": { "mock_hints": bool, "use_solution_hint": bool, ... },
           "results": [
             {
               "problem": ...,
@@ -606,10 +613,16 @@ def build_dataset_from_hint_outputs(
     from baseline_eval import extract_boxed_answer
 
     dataset: list[dict[str, Any]] = []
+    seen_problems: set[str] = set()  # dedupe by problem across files
 
     for path in paths:
         with open(path, "r", encoding="utf-8") as f:
             blob = json.load(f)
+        if metacognitive_only:
+            cfg = blob.get("config") or {}
+            if cfg.get("mock_hints") or cfg.get("use_solution_hint"):
+                print(f"Skipping {path} (not metacognitive: mock_hints={cfg.get('mock_hints')}, use_solution_hint={cfg.get('use_solution_hint')})")
+                continue
         items = blob.get("results", [])
         print(f"Loaded {len(items)} items from {path}")
 
@@ -637,6 +650,11 @@ def build_dataset_from_hint_outputs(
             target = rerun.get("predicted") or extract_boxed_answer(teacher_response)
             if not target:
                 continue
+
+            # Deduplicate: same problem in multiple runs → one training example
+            if problem.strip() in seen_problems:
+                continue
+            seen_problems.add(problem.strip())
 
             student_input = (
                 "You are a helpful math assistant.\n"

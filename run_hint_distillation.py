@@ -73,6 +73,18 @@ def main() -> None:
         dest="require_improved_only",
         help="Include all correct reruns, not only improved.",
     )
+    parser.add_argument(
+        "--metacognitive-only",
+        action="store_true",
+        default=True,
+        help="Use only files from metacognitive approach (behavior handbooks); skip mock_hints / use_solution_hint runs.",
+    )
+    parser.add_argument(
+        "--no-metacognitive-only",
+        action="store_false",
+        dest="metacognitive_only",
+        help="Include all hint files regardless of mock_hints / use_solution_hint.",
+    )
     args = parser.parse_args()
 
     paths = [os.path.abspath(p) for p in args.input]
@@ -84,6 +96,7 @@ def main() -> None:
     dataset = build_dataset_from_hint_outputs(
         paths,
         require_improved_only=args.require_improved_only,
+        metacognitive_only=args.metacognitive_only,
     )
     if not dataset:
         raise SystemExit(

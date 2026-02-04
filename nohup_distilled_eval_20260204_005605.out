@@ -1,0 +1,228 @@
+nohup: ignoring input
+Distilled Evaluation (with LoRA adapter): 200 samples
+Base model: Qwen/Qwen2.5-Math-1.5B-Instruct
+Adapter: results/run_distill_expanded_20260204_004957/adapter
+Output: results/run_distill_expanded_20260204_004957/distilled_eval_200.json
+
+Loading open-r1/OpenThoughts-114k-math...
+Total examples: 89120
+Loading Qwen/Qwen2.5-Math-1.5B-Instruct...
+`torch_dtype` is deprecated! Use `dtype` instead!
+Model loaded on cuda:0
+Loading LoRA adapter from /home/ubuntu/steering/results/run_distill_expanded_20260204_004957/adapter ...
+LoRA-adapted model loaded on cuda:0
+
+============================================================
+RUNNING DISTILLED EVALUATION
+============================================================
+1/200 [✓] acc=100.0% | pred=12... | gt=12... | 24.2s
+2/200 [✗] acc=50.0% | pred=90^\circ... | gt=60^\circ... | 25.7s
+3/200 [✗] acc=33.3% | pred=840... | gt=1680 \text{ meters}... | 38.8s
+4/200 [✗] acc=25.0% | pred=26... | gt=510... | 34.9s
+5/200 [✗] acc=20.0% | pred=(4, 0, 0)... | gt=(4, 4, 4), (-4, -4, -4)... | 48.1s
+6/200 [✗] acc=16.7% | pred=1200... | gt=1200, 2400, 3600, 4800... | 27.0s
+7/200 [✗] acc=14.3% | pred=\frac{2012}{9}... | gt=175... | 31.6s
+8/200 [✓] acc=25.0% | pred=25... | gt=25... | 24.4s
+9/200 [✓] acc=33.3% | pred=\text{The midpoints are collinear.}... | gt=\text{The midpoints of segments } A'D, B... | 22.6s
+10/200 [✓] acc=40.0% | pred=195... | gt=195... | 14.9s
+11/200 [✓] acc=45.5% | pred=35... | gt=35... | 12.5s
+12/200 [✓] acc=50.0% | pred=20... | gt=20... | 16.1s
+13/200 [✗] acc=46.2% | pred=\text{D}... | gt=\text{E}... | 23.0s
+14/200 [✓] acc=50.0% | pred=172.2... | gt=172.2... | 12.1s
+15/200 [✓] acc=53.3% | pred=223... | gt=223... | 27.8s
+16/200 [✗] acc=50.0% | pred=\frac{1}{7}... | gt=\frac{4}{13}... | 30.4s
+17/200 [✓] acc=52.9% | pred=1... | gt=x = 1... | 9.9s
+18/200 [✗] acc=50.0% | pred=AB + BC + CA... | gt=\text{Length of the broken line } A_{1} ... | 34.0s
+19/200 [✗] acc=47.4% | pred=\left( \frac{45 - 16\sqrt{3}}{12}, \frac... | gt=(7, 3)... | 44.6s
+20/200 [✓] acc=50.0% | pred=1... | gt=1... | 37.6s
+21/200 [✗] acc=47.6% | pred=(\cos \theta)^2... | gt=k... | 28.0s
+22/200 [✓] acc=50.0% | pred=(4, 2), (-4, -2), (2, 4), (-2, -4)... | gt=(4, 2), (2, 4), (-4, -2), (-2, -4)... | 37.4s
+23/200 [✗] acc=47.8% | pred=P = Q... | gt=P = Q... | 20.9s
+24/200 [✓] acc=50.0% | pred=5... | gt=5... | 13.4s
+25/200 [✓] acc=52.0% | pred=44... | gt=44... | 8.5s
+26/200 [✓] acc=53.8% | pred=6... | gt=6... | 16.4s
+27/200 [✗] acc=51.9% | pred=8... | gt=2n+1... | 28.3s
+28/200 [✗] acc=50.0% | pred=\frac{1}{4}... | gt=\frac{1}{2}... | 21.8s
+29/200 [✓] acc=51.7% | pred=32... | gt=32... | 45.9s
+30/200 [✓] acc=53.3% | pred=B... | gt=B... | 25.4s
+31/200 [✗] acc=51.6% | pred=12... | gt=14... | 27.7s
+32/200 [✓] acc=53.1% | pred=32... | gt=32... | 23.4s
+33/200 [✓] acc=54.5% | pred=\text{A}... | gt=\textbf{(A)} 0... | 19.1s
+34/200 [✓] acc=55.9% | pred=0... | gt=f(2a)=0... | 41.3s
+35/200 [✗] acc=54.3% | pred=\infty... | gt=11... | 35.5s
+36/200 [✓] acc=55.6% | pred=6... | gt=6... | 12.7s
+37/200 [✓] acc=56.8% | pred=1... | gt=x_{1009} x_{1010} \leq 1... | 34.6s
+38/200 [✓] acc=57.9% | pred=4... | gt= \overrightarrow{AB} = 4\overrightarrow{... | 29.3s
+39/200 [✗] acc=56.4% | pred=14... | gt=40... | 27.3s
+40/200 [✓] acc=57.5% | pred=\text{No}... | gt=\text{No}... | 15.4s
+41/200 [✓] acc=58.5% | pred=\text{Yes}... | gt=\text{Yes}... | 10.2s
+42/200 [✓] acc=59.5% | pred=\left[\frac{5}{2}, \sqrt{7}\right]... | gt=\left[\frac{5}{2}, \sqrt{7}\right]... | 49.3s
+43/200 [✗] acc=58.1% | pred=\frac{1}{6} a^3 \sin \alpha \sqrt{\frac{... | gt=\frac{1}{6} a^3 \sin\left(\frac{\alpha}{... | 36.2s
+44/200 [✓] acc=59.1% | pred=52... | gt=52... | 17.6s
+45/200 [✓] acc=60.0% | pred=\frac{3}{4}... | gt=0.75... | 23.3s
+46/200 [✓] acc=60.9% | pred=x + y = z... | gt=\text{There exist } x, y, z \in A \text{... | 35.3s
+47/200 [✓] acc=61.7% | pred=BK + KD = BL + LD... | gt=BK + KD = BL + LD... | 21.1s
+48/200 [✓] acc=62.5% | pred=4... | gt=4... | 9.4s
+49/200 [✓] acc=63.3% | pred=AC' = A'C... | gt=\text{\(AC' = A'C\)}... | 12.5s
+50/200 [✗] acc=62.0% | pred=f(x) = x... | gt=f(x) = \lfloor x \rfloor... | 42.1s
+51/200 [✗] acc=60.8% | pred=400... | gt=480... | 16.1s
+52/200 [✓] acc=61.5% | pred=w^2 + \sqrt{3}uv = a^2... | gt=w^2 + \sqrt{3} uv = a^2... | 46.4s
+53/200 [✓] acc=62.3% | pred=91... | gt=91... | 12.6s
+54/200 [✓] acc=63.0% | pred=4S \leq AM \cdot BC + BM \cdot CA + CM \... | gt=4S \leq AM \cdot BC + BM \cdot AC + CM \... | 23.3s
+55/200 [✓] acc=63.6% | pred=3... | gt=3... | 25.1s
+56/200 [✗] acc=62.5% | pred=11... | gt=\text{Proven}... | 24.1s
+57/200 [✓] acc=63.2% | pred=\text{C}... | gt=\text{C}... | 35.5s
+58/200 [✓] acc=63.8% | pred=16... | gt=16... | 15.4s
+59/200 [✗] acc=62.7% | pred=a + b + c - \operatorname{gcd}(b, c) - \... | gt=\text{The game always ends and the final... | 35.7s
+60/200 [✓] acc=63.3% | pred=\sqrt{\frac{4}{3} n^3 - \frac{1}{3} n}... | gt= \sum_{i=1}^n i x_i \leq \sqrt{\frac{4}{... | 56.4s
+61/200 [✓] acc=63.9% | pred=5... | gt=(E)... | 45.0s
+62/200 [✓] acc=64.5% | pred=\sqrt{7}... | gt=\sqrt{7}... | 28.0s
+63/200 [✓] acc=65.1% | pred=63.25... | gt=63.25... | 9.5s
+64/200 [✓] acc=65.6% | pred=y = 7 \text{ and } y = -\frac{3}{4}x + 7... | gt=y = 7 \quad \text{or} \quad y = -\frac{3... | 39.6s
+65/200 [✓] acc=66.2% | pred=(S_a, S_b, S_c, S_d) \text{ and } (S_a, ... | gt=(S_a, S_b, S_c, S_d)... | 21.2s
+66/200 [✗] acc=65.2% | pred=2... | gt=\frac{5}{4}... | 34.9s
+67/200 [✗] acc=64.2% | pred=20736... | gt=1155... | 44.6s
+68/200 [✗] acc=63.2% | pred=\mathrm{E} | f(\xi) - \mathrm{E} f(\xi) ... | gt=\mathrm{D} f(\xi) \leq \mathrm{D} \xi \q... | 45.1s
+69/200 [✓] acc=63.8% | pred=\text{Yes}... | gt=\text{Yes}... | 11.3s
+70/200 [✓] acc=64.3% | pred=32... | gt=32... | 34.1s
+71/200 [✗] acc=63.4% | pred=\text{ABCD is a rhombus}... | gt=\text{Rhombus}... | 27.6s
+72/200 [✗] acc=62.5% | pred=74... | gt=784... | 41.4s
+73/200 [✗] acc=61.6% | pred=... | gt=112... | 92.1s
+74/200 [✗] acc=60.8% | pred=C... | gt=B... | 17.3s
+75/200 [✓] acc=61.3% | pred=180^\circ... | gt=\angle AXB + \angle CXD = 180^\circ... | 13.6s
+76/200 [✗] acc=60.5% | pred=4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15... | gt=7 \text{ or } 9... | 20.8s
+77/200 [✓] acc=61.0% | pred=29... | gt=29... | 6.4s
+78/200 [✗] acc=60.3% | pred=(0, 1), \left( \frac{2\sqrt{6}}{5}, -\fr... | gt=(-1, 0), (1, 0), (0, 1), \left(-\frac{2 ... | 35.5s
+79/200 [✗] acc=59.5% | pred=\text{D}... | gt=B... | 11.0s
+80/200 [✗] acc=58.8% | pred=4... | gt=\text{On black squares, the number of ro... | 15.7s
+81/200 [✓] acc=59.3% | pred=CD \parallel C'D'... | gt=\text{The lines } (CD) \text{ and } (C'D... | 17.6s
+82/200 [✓] acc=59.8% | pred=6... | gt=6... | 25.9s
+83/200 [✓] acc=60.2% | pred=T_n < 1... | gt=T_n < 1... | 38.6s
+84/200 [✓] acc=60.7% | pred=R^3 - (H_a^2 + H_b^2 + H_c^2)R - 2H_aH_b... | gt=R^{3} - (H_{a}^{2} + H_{b}^{2} + H_{c}^{... | 24.8s
+85/200 [✓] acc=61.2% | pred=3... | gt=\text{D} \ 3... | 18.5s
+86/200 [✓] acc=61.6% | pred=2^{3860} \cdot \left(\frac{2018}{2048}\r... | gt= 2^{3860} \cdot \left(\frac{2018}{2048}\... | 26.3s
+87/200 [✓] acc=62.1% | pred=D... | gt=D... | 17.6s
+88/200 [✗] acc=61.4% | pred=1983... | gt=1983... | 33.5s
+89/200 [✓] acc=61.8% | pred=\begin{cases} 2 & \text{if } x \leqslant... | gt=2 \quad \text{if} \quad x \leq 2 \quad \... | 27.1s
+90/200 [✗] acc=61.1% | pred=\frac{11}{45}... | gt=\frac{16}{45}... | 18.6s
+91/200 [✓] acc=61.5% | pred=100... | gt=100... | 24.9s
+92/200 [✗] acc=60.9% | pred=4\pi... | gt=504 \pi... | 48.2s
+93/200 [✗] acc=60.2% | pred=49... | gt=86... | 31.9s
+94/200 [✓] acc=60.6% | pred=Q \text{ lies on the circle } K \text{ a... | gt=\frac{AQ}{QB} = \frac{DP}{PC}... | 22.2s
+95/200 [✗] acc=60.0% | pred=2... | gt=\frac{n+1}{n-1}... | 27.5s
+96/200 [✗] acc=59.4% | pred=(3, 4) \text{ and } (-3, -4)... | gt=(3, 2), (2, 3), (-3, -2), (-2, -3)... | 47.1s
+97/200 [✗] acc=58.8% | pred=3... | gt=5... | 26.2s
+98/200 [✗] acc=58.2% | pred=1 \text{ and } \frac{1}{2}... | gt= f_{\text{min}} = 2 - \sqrt{3} ... | 47.4s
+99/200 [✗] acc=57.6% | pred=8... | gt=7... | 47.8s
+100/200 [✓] acc=58.0% | pred=\text{No}... | gt=\text{No}... | 53.5s
+101/200 [✗] acc=57.4% | pred=\sqrt{\frac{2Q}{M \tau^2}}... | gt=a = \sqrt{\frac{2 Q}{M \tau^2 \left(1 + ... | 28.1s
+102/200 [✗] acc=56.9% | pred=f(x) = \begin{cases} 1 & \text{if } 0 \l... | gt=
+f(x) = 
+\begin{cases}
+\frac{2}{2 - x} &... | 33.3s
+103/200 [✗] acc=56.3% | pred=... | gt=240... | 96.9s
+104/200 [✓] acc=56.7% | pred=4... | gt=4n... | 22.3s
+105/200 [✗] acc=56.2% | pred=1 - \sqrt{2}... | gt=A... | 23.5s
+106/200 [✓] acc=56.6% | pred=x_1^2 + x_2^2 + \cdots + x_{10}^2 = y_1^... | gt=x_{1}^{2} + x_{2}^{2} + \cdots + x_{10}^... | 31.5s
+107/200 [✗] acc=56.1% | pred=55.50... | gt=83.25... | 19.1s
+108/200 [✓] acc=56.5% | pred=\frac{1}{2}... | gt=\frac{1}{2}... | 20.6s
+109/200 [✗] acc=56.0% | pred=76... | gt=38^\circ... | 21.4s
+110/200 [✗] acc=55.5% | pred=\frac{\sqrt{7}}{7}... | gt=\frac{1}{6}... | 53.6s
+111/200 [✓] acc=55.9% | pred=\frac{3}{4}... | gt=\frac{3}{4}... | 25.3s
+112/200 [✓] acc=56.2% | pred=\frac{1}{2}... | gt=\frac{1}{2}... | 30.9s
+113/200 [✓] acc=56.6% | pred=\text{The tetrahedron } A_1 A_2 A_3 A_4 ... | gt=\text{The tetrahedron } A_1A_2A_3A_4 \te... | 22.1s
+114/200 [✓] acc=57.0% | pred=\frac{4\pi}{3}... | gt=\frac{4\pi}{3}... | 23.0s
+115/200 [✓] acc=57.4% | pred=f(x) = 1... | gt=f(x) = 1... | 31.1s
+116/200 [✗] acc=56.9% | pred=44... | gt=95... | 38.2s
+117/200 [✗] acc=56.4% | pred=(p+1) \sum_{k=1}^{n-1} a_k^p \geq (q+1) ... | gt=(p+1) \sum_{k=1}^{n-1} a_{k}^{p} \geq (q... | 45.6s
+118/200 [✗] acc=55.9% | pred=526.875... | gt=294 \, \text{cm}^2, 12\pi \, \text{cm}... | 32.9s
+119/200 [✓] acc=56.3% | pred=p^{\alpha} \leq n... | gt=p^\alpha \leq n... | 34.1s
+120/200 [✗] acc=55.8% | pred=\frac{3\pi}{4}... | gt=x = 135^\circ + k \cdot 180^\circ, x = 5... | 50.2s
+121/200 [✗] acc=55.4% | pred=\frac{2(n-1)n(2n-1)}{3}... | gt=A = \frac{2}{3}n(n-1)(2n-1)... | 20.6s
+122/200 [✗] acc=54.9% | pred=2... | gt=4... | 21.5s
+123/200 [✓] acc=55.3% | pred=4... | gt=4... | 26.8s
+124/200 [✓] acc=55.6% | pred=\text{Yes}... | gt=\text{Yes, it is possible.}... | 25.7s
+125/200 [✓] acc=56.0% | pred=2n \text{ has a divisor } d \text{ such ... | gt=k < d \leq 2k... | 27.6s
+126/200 [✓] acc=56.3% | pred=35... | gt=35... | 23.8s
+127/200 [✗] acc=55.9% | pred=1... | gt=\text{The product of the numbers in at l... | 14.7s
+128/200 [✗] acc=55.5% | pred=\angle CAD < \pi / 3 < \angle A... | gt=\angle CAD < \frac{\pi}{3} < \angle A... | 46.0s
+129/200 [✗] acc=55.0% | pred=1... | gt=1237... | 15.7s
+130/200 [✓] acc=55.4% | pred=\frac{1}{6}... | gt=\frac{1}{6}... | 18.4s
+131/200 [✓] acc=55.7% | pred=90... | gt=90 \text{ eggs}... | 44.5s
+132/200 [✓] acc=56.1% | pred=\frac{mn}{\sqrt{m^2 + n^2}}... | gt=\max \{|ac+b|, |a+bc|\} \geq \frac{mn}{\... | 35.0s
+133/200 [✓] acc=56.4% | pred=1... | gt=1... | 18.2s
+134/200 [✗] acc=56.0% | pred=61... | gt=93... | 22.5s
+135/200 [✗] acc=55.6% | pred=2... | gt=4... | 22.1s
+136/200 [✓] acc=55.9% | pred=\frac{a_{1}^{3}}{\left(a_{2}-a_{3}\right... | gt=\text{The inequality is verified.}... | 39.8s
+137/200 [✓] acc=56.2% | pred=f(n) = cn... | gt=f(n) = bn... | 28.3s
+138/200 [✓] acc=56.5% | pred=0 \text{ and } -11... | gt=0... | 30.1s
+139/200 [✓] acc=56.8% | pred=\frac{KM}{ML} = \frac{KN}{NL}... | gt=\frac{KM}{ML} = \frac{KN}{NL}... | 17.2s
+140/200 [✗] acc=56.4% | pred=BC > AD... | gt=BC > AD... | 19.3s
+141/200 [✓] acc=56.7% | pred=0... | gt=19x + 9y \text{ is divisible by 11}... | 28.6s
+142/200 [✗] acc=56.3% | pred=B... | gt=A... | 29.2s
+143/200 [✓] acc=56.6% | pred=5... | gt=5... | 25.7s
+144/200 [✗] acc=56.2% | pred=B... | gt=14... | 31.3s
+145/200 [✗] acc=55.9% | pred=4... | gt=
+\sqrt{a^2 + ab + b^2} + \sqrt{a^2 + ac ... | 38.9s
+146/200 [✓] acc=56.2% | pred=0... | gt= 0 ... | 33.7s
+147/200 [✓] acc=56.5% | pred=45... | gt=45... | 22.5s
+148/200 [✗] acc=56.1% | pred=891... | gt=121... | 29.7s
+149/200 [✗] acc=55.7% | pred=96... | gt=432... | 16.9s
+150/200 [✓] acc=56.0% | pred=30^\circ... | gt=30^{\circ}... | 27.4s
+151/200 [✗] acc=55.6% | pred=200... | gt=205 \text{°C}... | 35.1s
+152/200 [✓] acc=55.9% | pred=even... | gt=\text{The number of stones on black squa... | 20.5s
+153/200 [✗] acc=55.6% | pred=1... | gt=2... | 16.4s
+154/200 [✓] acc=55.8% | pred=\sqrt{a+b}... | gt=d \leq \sqrt{a + b}... | 26.0s
+155/200 [✗] acc=55.5% | pred=A... | gt=C... | 24.8s
+156/200 [✓] acc=55.8% | pred=\text{No}... | gt=\text{No, such integers do not exist.}... | 12.3s
+157/200 [✗] acc=55.4% | pred=900... | gt=1100... | 43.0s
+158/200 [✓] acc=55.7% | pred=D... | gt=(D)... | 20.0s
+159/200 [✓] acc=56.0% | pred=e^2... | gt=e^2... | 16.9s
+160/200 [✗] acc=55.6% | pred=400... | gt=578... | 64.6s
+161/200 [✓] acc=55.9% | pred=\text{Yes}... | gt=\text{Yes}... | 26.3s
+162/200 [✓] acc=56.2% | pred=2... | gt=C... | 22.2s
+163/200 [✗] acc=55.8% | pred=\text{Yes}... | gt=\text{No}... | 23.0s
+164/200 [✓] acc=56.1% | pred=\text{All numbers in } N \text{ must rec... | gt= \text{All numbers in } N \text{ must re... | 26.4s
+165/200 [✓] acc=56.4% | pred=4, 6, 10... | gt=n = 4: M_{13} = M_1... | 40.4s
+166/200 [✓] acc=56.6% | pred=12... | gt=12... | 26.3s
+167/200 [✗] acc=56.3% | pred=(1, 1, 11), (-4, -4, -4), (3, 3, 3)... | gt=(3, 3, 3), (-4, -4, -4), (1, 1, 11), (11... | 42.7s
+168/200 [✓] acc=56.5% | pred=16... | gt=16... | 13.6s
+169/200 [✓] acc=56.8% | pred=8... | gt=\text{The sum of all divisors of } n \te... | 30.6s
+170/200 [✗] acc=56.5% | pred=\frac{1}{9}... | gt=9... | 21.9s
+171/200 [✗] acc=56.1% | pred=18270... | gt=401... | 32.7s
+172/200 [✓] acc=56.4% | pred=x - 1 \text{ is a factor of } P(x)... | gt=x - 1 \text{ is a factor of } P(x).... | 17.6s
+173/200 [✓] acc=56.6% | pred=40000... | gt=B... | 16.8s
+174/200 [✓] acc=56.9% | pred=100... | gt=100 \text{ km/h}... | 47.4s
+175/200 [✓] acc=57.1% | pred=a_0 + dnx... | gt=\text{This confirms that } p(x) \text{ i... | 27.9s
+176/200 [✗] acc=56.8% | pred=y = \frac{2}{7}x + \frac{19}{7} \text{ a... | gt=2x - 7y + 19 = 0... | 38.6s
+177/200 [✓] acc=57.1% | pred=1233... | gt=1233... | 6.1s
+178/200 [✓] acc=57.3% | pred=\frac{BP_1}{BC} = \frac{1}{2} \cdot \fra... | gt=\frac{BP_1}{BC} = \frac{1}{2} \cdot \fra... | 26.1s
+179/200 [✗] acc=57.0% | pred=23... | gt=12, 34, 56, \text{ or } 78... | 31.9s
+180/200 [✗] acc=56.7% | pred=\text{No}... | gt=\text{Yes}... | 24.4s
+181/200 [✗] acc=56.4% | pred=(0, 3, 1)... | gt= (0, 3, 1) ... | 37.4s
+182/200 [✓] acc=56.6% | pred=\text{The line } KL \text{ bisects the s... | gt=\text{QED}... | 16.1s
+183/200 [✓] acc=56.8% | pred=\mathcal{O}(n^{7/3}) \text{ and } \Omega... | gt= \mathcal{O}(n^{7/3}) ... | 26.6s
+184/200 [✗] acc=56.5% | pred=2... | gt= \sqrt{2} ... | 28.6s
+185/200 [✓] acc=56.8% | pred=31... | gt=31... | 9.1s
+186/200 [✗] acc=56.5% | pred=1988... | gt=\text{Thus, amidst the powers of 2, two ... | 24.7s
+187/200 [✓] acc=56.7% | pred=30... | gt=30... | 15.3s
+188/200 [✓] acc=56.9% | pred=7... | gt=7... | 38.7s
+189/200 [✓] acc=57.1% | pred=2b^2 = 9ac... | gt=2b^2 = 9ac... | 21.3s
+190/200 [✓] acc=57.4% | pred=\frac{1}{3}... | gt=\frac{a^3}{b+c+d} + \frac{b^3}{a+c+d} + ... | 41.2s
+191/200 [✗] acc=57.1% | pred=33... | gt=8... | 21.0s
+192/200 [✗] acc=56.8% | pred=p... | gt=\text{Solution is proven}... | 12.6s
+193/200 [✗] acc=56.5% | pred=M... | gt=C... | 15.5s
+194/200 [✗] acc=56.2% | pred=\text{E}... | gt=D... | 28.1s
+195/200 [✗] acc=55.9% | pred=263... | gt=660... | 37.5s
+196/200 [✓] acc=56.1% | pred=\frac{n^4}{n^2 - 1}... | gt=\frac{n^4}{n^2 - 1}... | 40.1s
+197/200 [✓] acc=56.3% | pred=249... | gt=249... | 17.9s
+198/200 [✗] acc=56.1% | pred=3 \log_{2} \left[ u_{n} \right] = 2^{n} ... | gt=\text{proven}... | 36.7s
+199/200 [✓] acc=56.3% | pred=a_{\operatorname{gcd}(m, n)}... | gt=\gcd(a_m, a_n) = a_{\gcd(m, n)}... | 24.4s
+200/200 [✓] acc=56.5% | pred=4 \cos 2 \alpha... | gt=4 \cos 2 \alpha... | 35.2s
+
+============================================================
+FINAL DISTILLED RESULTS
+============================================================
+Evaluated: 200/200 (skipped 0 due to context length)
+Accuracy: 56.50% (113/200)
+Results saved to: results/run_distill_expanded_20260204_004957/distilled_eval_200.json

@@ -1,0 +1,28 @@
+nohup: ignoring input
+Output directory: results/run_distill_expanded_20260204_004957
+Building distillation dataset from hint outputs …
+Loaded 180 items from /home/ubuntu/steering/results/run_20260203_052646/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints.json
+Loaded 180 items from /home/ubuntu/steering/results/run_20260203_064154/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints.json
+Loaded 180 items from /home/ubuntu/steering/results/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints.json
+Loaded 180 items from /home/ubuntu/steering/results/run_hints5_20260128_090143/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints.json
+Loaded 180 items from /home/ubuntu/steering/results/run_20260128_055816/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints.json
+Loaded 180 items from /home/ubuntu/steering/results/run_20260128_055816/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints_llm_judged.json
+Loaded 40 items from /home/ubuntu/steering/results/run_20260125_070321/wrong_subset_with_hints.json
+Loaded 180 items from /home/ubuntu/steering/results/run_20260125_065836/wrong_subset_with_hints.json
+Loaded 40 items from /home/ubuntu/steering/results/run_20260125_062653/wrong_subset_with_hints.json
+Loaded 10 items from /home/ubuntu/steering/baseline_eval_wrong_geometry_with_hints.json
+Loaded 14 items from /home/ubuntu/steering/baseline_eval_wrong_general_with_hints.json
+Loaded 180 items from /home/ubuntu/steering/baseline_eval_20260121_022109_wrong_llm_judged_wrong_with_hints.json
+Built distillation dataset with 134 examples.
+Saved 134 examples → results/run_distill_expanded_20260204_004957/math_hints_distill.json
+Fine-tuning student (LoRA) …
+  Loading base model  Qwen/Qwen2.5-Math-1.5B-Instruct …
+`torch_dtype` is deprecated! Use `dtype` instead!
+trainable params: 2,179,072 || all params: 1,545,893,376 || trainable%: 0.1410
+  Epoch 1 done — avg loss 0.9176
+  Epoch 2 done — avg loss 0.5280
+  Epoch 3 done — avg loss 0.3485
+  Saved LoRA adapter → /home/ubuntu/steering/results/run_distill_expanded_20260204_004957/adapter/
+Done. Adapter saved to: /home/ubuntu/steering/results/run_distill_expanded_20260204_004957/adapter
+Run distilled eval with: --adapter-path results/run_distill_expanded_20260204_004957/adapter
+Done. Dataset: results/run_distill_expanded_20260204_004957/math_hints_distill.json  Adapter: results/run_distill_expanded_20260204_004957/adapter
