@@ -45,7 +45,7 @@ if [[ ${#ARGS[@]} -eq 0 ]]; then
   exit 1
 fi
 
-python run_hint_distillation.py \
+python src/run_hint_distillation.py \
   "${ARGS[@]}" \
   --dataset-out "$RUN_DIR/math_hints_distill.json" \
   --adapter-path "$RUN_DIR/adapter" \

@@ -368,7 +368,7 @@ class FinetuneConfig:
     )
     lora_dropout: float = 0.05
     # output
-    adapter_save_path: str = "context_distillation_adapter"
+    adapter_save_path: str = "artifacts/context_distillation_adapter"
 
 
 def finetune_student(

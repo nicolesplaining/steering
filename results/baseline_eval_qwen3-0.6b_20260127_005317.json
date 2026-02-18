@@ -1,0 +1,37 @@
+{
+  "config": {
+    "model": "Qwen/Qwen3-0.6B",
+    "dataset": "open-r1/OpenThoughts-114k-math",
+    "n_samples": 1,
+    "max_context_length": 4096,
+    "seed": 42,
+    "timestamp": "2026-01-27T00:53:36.456315"
+  },
+  "progress": {
+    "done": 1,
+    "total": 1,
+    "evaluated": 1,
+    "skipped": 0,
+    "correct": 0,
+    "accuracy": 0.0
+  },
+  "results": [
+    {
+      "idx": 0,
+      "dataset_idx": 76644,
+      "problem": "In the game Deal or No Deal, participants choose a box at random from a set of $26,$ one containing each of the following values: \\begin{tabular}{|c|c|}\\hline\\$.01&\\$1,000\\\\\\hline\\$1&\\$5,000\\\\\\hline\\$5&\\$10,000\\\\\\hline\\$10&\\$25,000\\\\\\hline\\$25&\\$50,000\\\\\\hline\\$50&\\$75,000\\\\\\hline\\$75&\\$100,000\\\\\\hline\\$100&\\$200,000\\\\\\hline\\$200&\\$300,000\\\\\\hline\\$300&\\$400,000\\\\\\hline\\$400&\\$500,000\\\\\\hline\\$500&\\$750,000\\\\\\hline\\$750&\\$1,000,000\\\\\\hline\\end{tabular} After choosing a box, participants eliminate other boxes by opening them, showing the amount of money in the box to the crowd, and then removing that box (and its money!) from the game. What is the minimum number of boxes a participant needs to eliminate in order to have a half chance of holding at least $\\$100,\\!000$ as his or her chosen box?",
+      "solution": "To solve this problem, let's break down the process and the logic behind the solution:\n\n1. **Identify the number of boxes with at least $\\$100,000$:** Looking at the list of values in the boxes, we see that the values starting from $\\$100,000$ to $\\$1,000,000$ are the ones we're interested in. Counting these, we find there are $7$ boxes that contain at least $\\$100,000$.\n\n2. **Determine the probability condition:** For a participant to have a half chance (or a probability of $1/2$) of holding a box with at least $\\$100,000$, the number of these high-value boxes must be equal to the number of all other remaining boxes. This is because, in the simplest case, if there is 1 high-value box and 1 other box, the chance of picking the high-value box is $1/2$. Extending this logic, if there are $7$ high-value boxes, there should be $7$ other boxes left to maintain the $1/2$ probability.\n\n3. **Calculate the number of boxes to eliminate:** Initially, there are $26$ boxes in total. If we need to end up with $7$ high-value boxes and $7$ other boxes, that's a total of $14$ boxes that must remain. To find out how many boxes need to be eliminated, we subtract this number from the total number of boxes:\n   \\[\n   26 - 14 = 26 - (7 + 7) = 26 - 7 - 7.\n   \\]\n   Simplifying this, we get:\n   \\[\n   26 - 7 - 7 = 12.\n   \\]\n\nTherefore, the minimum number of boxes a participant needs to eliminate to have a half chance of holding at least $\\$100,000$ is $\\boxed{12}$.",
+      "source": "math",
+      "skipped": false,
+      "response": "<think>\nOkay, so I need to figure out the minimum number of boxes",
+      "predicted": "",
+      "ground_truth": "12",
+      "correct": false,
+      "match_type": "llm_judge",
+      "llm_judgment": "INCORRECT - The model did not provide a final numerical answer; the correct answer is 12 boxes.",
+      "input_tokens": 358,
+      "generated_tokens": 15,
+      "generation_time_sec": 0.870140790939331
+    }
+  ]
+}

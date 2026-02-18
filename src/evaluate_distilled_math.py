@@ -68,7 +68,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--adapter-path",
-        default="context_distillation_adapter",
+        default="artifacts/context_distillation_adapter",
         help="Path to the saved LoRA adapter (from finetune_student).",
     )
     parser.add_argument(

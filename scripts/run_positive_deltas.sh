@@ -11,7 +11,7 @@ echo ""
 
 # hinted_minus_empty | 12-23 | strengths [0.5, 0.8]
 echo "[1/6] Running hinted_minus_empty | 12-23 | strengths [0.5, 0.8]"
-nohup python sweep_steering_experiments.py \
+nohup python src/sweep_steering_experiments.py \
   --input "$INPUT" \
   --output-dir "$OUTPUT_DIR/run_1_hinted_minus_empty_12-23" \
   --layers-sets "12-23" \
@@ -23,7 +23,7 @@ echo "  Started with PID $PID1"
 
 # hinted_minus_empty | 14-27 | strengths [0.3, 0.5, 0.8, 1.2]
 echo "[2/6] Running hinted_minus_empty | 14-27 | strengths [0.3, 0.5, 0.8, 1.2]"
-nohup python sweep_steering_experiments.py \
+nohup python src/sweep_steering_experiments.py \
   --input "$INPUT" \
   --output-dir "$OUTPUT_DIR/run_2_hinted_minus_empty_14-27" \
   --layers-sets "14-27" \
@@ -35,7 +35,7 @@ echo "  Started with PID $PID2"
 
 # hinted_minus_empty | 16-27 | strengths [0.8, 1.0]
 echo "[3/6] Running hinted_minus_empty | 16-27 | strengths [0.8, 1.0]"
-nohup python sweep_steering_experiments.py \
+nohup python src/sweep_steering_experiments.py \
   --input "$INPUT" \
   --output-dir "$OUTPUT_DIR/run_3_hinted_minus_empty_16-27" \
   --layers-sets "16-27" \
@@ -47,7 +47,7 @@ echo "  Started with PID $PID3"
 
 # hinted_minus_unhinted | 12-23 | strengths [0.3, 1.0, 1.2, 1.5]
 echo "[4/6] Running hinted_minus_unhinted | 12-23 | strengths [0.3, 1.0, 1.2, 1.5]"
-nohup python sweep_steering_experiments.py \
+nohup python src/sweep_steering_experiments.py \
   --input "$INPUT" \
   --output-dir "$OUTPUT_DIR/run_4_hinted_minus_unhinted_12-23" \
   --layers-sets "12-23" \
@@ -59,7 +59,7 @@ echo "  Started with PID $PID4"
 
 # hinted_minus_unhinted | 14-27 | strengths [0.3, 0.5, 1.2]
 echo "[5/6] Running hinted_minus_unhinted | 14-27 | strengths [0.3, 0.5, 1.2]"
-nohup python sweep_steering_experiments.py \
+nohup python src/sweep_steering_experiments.py \
   --input "$INPUT" \
   --output-dir "$OUTPUT_DIR/run_5_hinted_minus_unhinted_14-27" \
   --layers-sets "14-27" \
@@ -71,7 +71,7 @@ echo "  Started with PID $PID5"
 
 # hinted_minus_unhinted | 16-27 | strengths [0.3, 1.0]
 echo "[6/6] Running hinted_minus_unhinted | 16-27 | strengths [0.3, 1.0]"
-nohup python sweep_steering_experiments.py \
+nohup python src/sweep_steering_experiments.py \
   --input "$INPUT" \
   --output-dir "$OUTPUT_DIR/run_6_hinted_minus_unhinted_16-27" \
   --layers-sets "16-27" \

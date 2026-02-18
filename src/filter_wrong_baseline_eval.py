@@ -9,7 +9,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input",
-        default="baseline_eval_20260121_022109.json",
+        default="results/baseline_eval_20260121_022109.json",
         help="Path to the baseline_eval JSON file.",
     )
     parser.add_argument(

@@ -174,7 +174,7 @@ if __name__ == "__main__":
         ("What is 3 * 5?", "15"),
     ]
     
-    steering_vector_path = "steering_vector_neutral.pt"
+    steering_vector_path = "artifacts/steering_vector_neutral.pt"
 
     def load_steering_vector(path: str):
         with torch.serialization.safe_globals([SteeringVector]):

@@ -49,7 +49,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--adapter-path",
-        default="context_distillation_adapter",
+        default="artifacts/context_distillation_adapter",
         help="Directory where the LoRA adapter will be saved.",
     )
     parser.add_argument(

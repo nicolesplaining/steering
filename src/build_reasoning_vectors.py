@@ -193,9 +193,9 @@ if __name__ == "__main__":
                     output = model.generate(**inputs, max_new_tokens=100, do_sample=False)
             print(tokenizer.decode(output[0], skip_special_tokens=True))
     
-    torch.save(sv_neutral, "steering_vector_neutral.pt")
-    torch.save(sv_empty, "steering_vector_empty.pt")
-    print("\nSaved: steering_vector_neutral.pt, steering_vector_empty.pt")
+    torch.save(sv_neutral, "artifacts/steering_vector_neutral.pt")
+    torch.save(sv_empty, "artifacts/steering_vector_empty.pt")
+    print("\nSaved: artifacts/steering_vector_neutral.pt, artifacts/steering_vector_empty.pt")
 
 
 

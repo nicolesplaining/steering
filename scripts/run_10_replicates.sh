@@ -20,7 +20,7 @@ for i in $(seq 1 10); do
   RUN_DIR="$PARENT_DIR/run_$i"
   mkdir -p "$RUN_DIR"
   echo "[$i/10] Running replicate $i -> $RUN_DIR"
-  python sweep_steering_experiments.py \
+  python src/sweep_steering_experiments.py \
     --input "$INPUT" \
     --output-dir "$RUN_DIR" \
     --layers-sets "16-27" \

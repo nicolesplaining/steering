@@ -1,0 +1,87 @@
+{
+  "timestamp": "2025-12-31T19:04:10.424628",
+  "model": "Qwen/Qwen3-8B",
+  "num_test": 200,
+  "k_values": [
+    0,
+    1,
+    3,
+    5,
+    7,
+    9
+  ],
+  "thinking_results": {
+    "0": {
+      "accuracy": 0.855,
+      "correct": 171,
+      "total": 200
+    },
+    "1": {
+      "accuracy": 0.93,
+      "correct": 186,
+      "total": 200
+    },
+    "3": {
+      "accuracy": 0.935,
+      "correct": 187,
+      "total": 200
+    },
+    "5": {
+      "accuracy": 0.96,
+      "correct": 192,
+      "total": 200
+    },
+    "7": {
+      "accuracy": 0.955,
+      "correct": 191,
+      "total": 200
+    },
+    "9": {
+      "accuracy": 0.94,
+      "correct": 188,
+      "total": 200
+    }
+  },
+  "non_thinking_results": {
+    "0": {
+      "accuracy": 0.905,
+      "correct": 181,
+      "total": 200
+    },
+    "1": {
+      "accuracy": 0.945,
+      "correct": 189,
+      "total": 200
+    },
+    "3": {
+      "accuracy": 0.955,
+      "correct": 191,
+      "total": 200
+    },
+    "5": {
+      "accuracy": 0.935,
+      "correct": 187,
+      "total": 200
+    },
+    "7": {
+      "accuracy": 0.95,
+      "correct": 190,
+      "total": 200
+    },
+    "9": {
+      "accuracy": 0.95,
+      "correct": 190,
+      "total": 200
+    }
+  },
+  "conclusions": {
+    "thinking_baseline": 0.855,
+    "thinking_best_k": 5,
+    "thinking_best_acc": 0.96,
+    "non_thinking_baseline": 0.905,
+    "non_thinking_best_k": 3,
+    "non_thinking_best_acc": 0.955,
+    "icl_helps_thinking": true,
+    "icl_helps_non_thinking": true
+  }
+}
