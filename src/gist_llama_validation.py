@@ -642,11 +642,15 @@ def phase_full_hint(
     print(f"Evaluating {len(valid)} problems with full hints...")
 
     improved = []
+    all_results = []
+    n_empty = 0
     for i, item in enumerate(valid):
         response = generate_with_hint(
             model, tokenizer, item["problem"], item["behaviors_block"], max_new_tokens
         )
         predicted = extract_boxed_answer(response)
+        if not predicted:
+            n_empty += 1
         correct, debug = is_correct(predicted, item["ground_truth"])
         item_result = {
             **item,
@@ -655,16 +659,18 @@ def phase_full_hint(
             "full_hint_correct": correct,
             "full_hint_match_type": debug.get("match_type", ""),
         }
+        all_results.append(item_result)
         if correct:
             improved.append(item_result)
-        if (i + 1) % 10 == 0 or i == len(valid) - 1:
-            print(
-                f"  [{i+1}/{len(valid)}] improved so far: {len(improved)}"
-            )
+        status = "✓" if correct else "✗"
+        print(f"\n  [{i+1}/{len(valid)}] {status} pred={predicted!r} | gt={item['ground_truth']!r}")
+        print(f"  HINT:     {item['behaviors_block'][:200].replace(chr(10), ' ')}...")
+        print(f"  RESPONSE: {response[:400] if response else '(empty)'}")
+        print(f"  {'─'*60}")
 
     print(
         f"\nFull hint: {len(improved)}/{len(valid)} improved "
-        f"(need {target_improved})"
+        f"(need {target_improved}) | {n_empty} empty responses"
     )
     if len(improved) < target_improved:
         print(
@@ -677,8 +683,10 @@ def phase_full_hint(
             {
                 "phase": "full_hint",
                 "improved": improved,
+                "all_results": all_results,
                 "n_improved": len(improved),
                 "n_evaluated": len(valid),
+                "n_empty": n_empty,
             },
             f,
             indent=2,
