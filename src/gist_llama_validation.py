@@ -352,7 +352,7 @@ def generate_no_hint(
     problem: str,
     max_new_tokens: int = 1024,
 ) -> str:
-    """Generate with Alpaca format, no hint."""
+    """Generate with gisting repo's Alpaca format (Instruction/Input/Output)."""
     prompt = (
         f"Instruction: Solve the following math problem step by step. "
         f"Put your final answer in \\boxed{{}}.\n"
@@ -385,12 +385,11 @@ def generate_with_hint(
     behaviors_block: str,
     max_new_tokens: int = 1024,
 ) -> str:
-    """Generate with Alpaca format, full behaviors in instruction."""
+    """Generate with gisting repo's Alpaca format (Instruction/Input/Output)."""
     prompt = (
-        f"Instruction: When solving this math problem, apply these behaviors:\n"
+        f"Instruction: When solving this math problem, use the following hint:\n"
         f"{behaviors_block}\n\n"
-        f"Solve the problem step by step. Reference the behavior names in your "
-        f"reasoning. Put your final answer in \\boxed{{}}.\n"
+        f"Solve the problem step by step. Put your final answer in \\boxed{{}}.\n"
         f"Input: {problem}\n"
         f"Output:"
     )
@@ -430,10 +429,9 @@ def generate_with_gist(
 
     # -- Step 1: Compress instruction --
     instruction_text = (
-        f"Instruction: When solving this math problem, apply these behaviors:\n"
+        f"Instruction: When solving this math problem, use the following hint:\n"
         f"{behaviors_block}\n\n"
-        f"Solve the problem step by step. Reference the behavior names in your "
-        f"reasoning. Put your final answer in \\boxed{{}}."
+        f"Solve the problem step by step. Put your final answer in \\boxed{{}}."
     )
     prepped_instruction = f"{instruction_text}\n{gist_str}"
     instruction_input_ids = tokenizer.encode(prepped_instruction)
