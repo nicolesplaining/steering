@@ -223,12 +223,19 @@ def generate_hint_for_item(
 
     try:
         # Step 1: Generate reflection
+        # Use a large max_completion_tokens budget: reasoning models (e.g. gpt-5,
+        # o3) consume reasoning tokens before emitting visible output, so a small
+        # cap (e.g. 512) can exhaust the budget on internal reasoning and return
+        # an empty string with no API error. 8192 gives ample room for both.
         reflection_response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": reflection_prompt}],
-            max_completion_tokens=512,
+            max_completion_tokens=8192,
         )
-        reflection_text = reflection_response.choices[0].message.content.strip()
+        reflection_text = (reflection_response.choices[0].message.content or "").strip()
+        if not reflection_text:
+            result["error"] = "Empty reflection response (reasoning model used all tokens?)"
+            return result
 
         # Step 2: Generate behaviors
         behavior_prompt = STRONG_BEHAVIOR_PROMPT_TEMPLATE.format(
@@ -238,9 +245,12 @@ def generate_hint_for_item(
         behavior_response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": behavior_prompt}],
-            max_completion_tokens=512,
+            max_completion_tokens=8192,
         )
-        behavior_text = behavior_response.choices[0].message.content.strip()
+        behavior_text = (behavior_response.choices[0].message.content or "").strip()
+        if not behavior_text:
+            result["error"] = "Empty behavior response (reasoning model used all tokens?)"
+            return result
 
         result["hint"] = behavior_text
         result["reflection"] = reflection_text
