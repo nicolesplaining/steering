@@ -214,14 +214,14 @@ Student's attempt:
 {response}
 
 Student's answer: {predicted}
-Correct answer: {ground_truth}
 
-Give a concise hint that would help the student solve this problem correctly, without revealing the final answer. Focus on:
-- The key insight, theorem, or technique needed
-- What the student did wrong and how to fix it
-- Any intermediate steps or relationships that point toward the solution
+Write a hint that helps the student solve this correctly. You should:
+- Name the exact theorem, formula, or technique needed
+- Point out specifically where the student's reasoning went wrong
+- Give key intermediate steps or relationships (e.g. "rewrite the expression as X", "apply identity Y to get Z")
+- Do NOT reveal the final numeric/symbolic answer
 
-Keep the hint to 2-5 sentences. Be specific and actionable.
+Be specific and detailed — vague advice like "be more careful" is useless. 3-6 sentences.
 """
 
 
@@ -237,7 +237,6 @@ def generate_hint_simple(
         problem=item.get("problem", ""),
         response=item.get("response", ""),
         predicted=item.get("predicted", ""),
-        ground_truth=item.get("ground_truth", ""),
     )
 
     try:
