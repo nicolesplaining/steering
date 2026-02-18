@@ -205,6 +205,58 @@ def _format_behaviors_as_lines(hint: str) -> str:
     return hint
 
 
+SIMPLE_HINT_PROMPT_TEMPLATE = """A student is trying to solve the math problem below but got it wrong.
+
+Problem:
+{problem}
+
+Student's attempt:
+{response}
+
+Student's answer: {predicted}
+Correct answer: {ground_truth}
+
+Give a concise hint that would help the student solve this problem correctly, without revealing the final answer. Focus on:
+- The key insight, theorem, or technique needed
+- What the student did wrong and how to fix it
+- Any intermediate steps or relationships that point toward the solution
+
+Keep the hint to 2-5 sentences. Be specific and actionable.
+"""
+
+
+def generate_hint_simple(
+    client: Any,
+    model: str,
+    item: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Single-call hint generation: one prompt, one response."""
+    result: Dict[str, Any] = {"hint": "", "error": None}
+
+    prompt = SIMPLE_HINT_PROMPT_TEMPLATE.format(
+        problem=item.get("problem", ""),
+        response=item.get("response", ""),
+        predicted=item.get("predicted", ""),
+        ground_truth=item.get("ground_truth", ""),
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_completion_tokens=8192,
+        )
+        hint_text = (response.choices[0].message.content or "").strip()
+        if not hint_text:
+            result["error"] = "Empty response (reasoning model used all tokens?)"
+            return result
+        result["hint"] = hint_text
+    except Exception as exc:
+        result["error"] = f"{type(exc).__name__}: {exc}"
+
+    return result
+
+
 def generate_hint_for_item(
     client: Any,
     model: str,
@@ -222,11 +274,6 @@ def generate_hint_for_item(
     )
 
     try:
-        # Step 1: Generate reflection
-        # Use a large max_completion_tokens budget: reasoning models (e.g. gpt-5,
-        # o3) consume reasoning tokens before emitting visible output, so a small
-        # cap (e.g. 512) can exhaust the budget on internal reasoning and return
-        # an empty string with no API error. 8192 gives ample room for both.
         reflection_response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": reflection_prompt}],
@@ -237,7 +284,6 @@ def generate_hint_for_item(
             result["error"] = "Empty reflection response (reasoning model used all tokens?)"
             return result
 
-        # Step 2: Generate behaviors
         behavior_prompt = STRONG_BEHAVIOR_PROMPT_TEMPLATE.format(
             reflection_prompt=reflection_prompt,
             reflection=reflection_text,
@@ -540,31 +586,35 @@ def phase_hints(
     baseline_results: List[Dict[str, Any]],
     hint_model: str,
     save_path: str,
+    simple_hint: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Phase 2: Generate behavior hints for wrong problems."""
+    """Phase 2: Generate hints for wrong problems."""
     from openai import OpenAI
 
     print(f"\n{'='*60}")
     print("PHASE 2: Generate hints")
     print(f"{'='*60}")
 
+    hint_fn = generate_hint_simple if simple_hint else generate_hint_for_item
+    mode = "simple (1 call)" if simple_hint else "two-stage (2 calls)"
+
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     wrong = [r for r in baseline_results if not r["correct"]]
-    print(f"Generating hints for {len(wrong)} wrong problems using {hint_model}...")
+    print(f"Generating hints for {len(wrong)} wrong problems using {hint_model} [{mode}]...")
 
     hinted = []
     for i, item in enumerate(wrong):
-        hint_result = generate_hint_for_item(client, hint_model, item)
+        hint_result = hint_fn(client, hint_model, item)
+        hint_text = hint_result["hint"]
         item_with_hint = {
             **item,
-            "hint_raw": hint_result["hint"],
+            "hint_raw": hint_text,
             "hint_error": hint_result.get("error"),
-            "behaviors_block": _format_behaviors_as_lines(hint_result["hint"]),
+            "behaviors_block": hint_text if simple_hint else _format_behaviors_as_lines(hint_text),
         }
         hinted.append(item_with_hint)
         status = "ok" if not hint_result.get("error") else "ERROR"
         print(f"  [{i+1}/{len(wrong)}] {status}")
-        # Periodic checkpoint
         if (i + 1) % 10 == 0 or i == len(wrong) - 1:
             with open(save_path, "w") as f:
                 json.dump({"phase": "hints", "results": hinted}, f, indent=2)
@@ -823,6 +873,11 @@ def _parse_args() -> argparse.Namespace:
         choices=["fp16", "bf16", "fp32"],
         help="Model precision",
     )
+    parser.add_argument(
+        "--simple-hint",
+        action="store_true",
+        help="Use single-call hint generation instead of two-stage reflection+behavior",
+    )
     # Paths to intermediate results (for resuming phases)
     parser.add_argument("--baseline-file", type=str, default=None)
     parser.add_argument("--hints-file", type=str, default=None)
@@ -880,7 +935,7 @@ def main():
         if baseline_results is None:
             print(f"ERROR: Baseline results required. Run --phase baseline first.")
             sys.exit(1)
-        hinted_results = phase_hints(baseline_results, args.hint_model, hints_path)
+        hinted_results = phase_hints(baseline_results, args.hint_model, hints_path, simple_hint=args.simple_hint)
     elif args.phase in ("full_hint", "all") or (args.phase == "gist_eval" and not os.path.exists(full_hint_path)):
         if os.path.exists(hints_path):
             print(f"Loading hints results from {hints_path}")
