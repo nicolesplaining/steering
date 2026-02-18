@@ -552,15 +552,15 @@ def phase_hints(
             "behaviors_block": _format_behaviors_as_lines(hint_result["hint"]),
         }
         hinted.append(item_with_hint)
+        status = "ok" if not hint_result.get("error") else "ERROR"
+        print(f"  [{i+1}/{len(wrong)}] {status}")
+        # Periodic checkpoint
         if (i + 1) % 10 == 0 or i == len(wrong) - 1:
-            status = "ok" if not hint_result.get("error") else "ERROR"
-            print(f"  [{i+1}/{len(wrong)}] {status}")
+            with open(save_path, "w") as f:
+                json.dump({"phase": "hints", "results": hinted}, f, indent=2)
 
     valid = [h for h in hinted if not h.get("hint_error")]
     print(f"\nGenerated hints: {len(valid)} valid, {len(hinted)-len(valid)} errors")
-
-    with open(save_path, "w") as f:
-        json.dump({"phase": "hints", "results": hinted}, f, indent=2)
     print(f"Saved to {save_path}")
     return hinted
 
