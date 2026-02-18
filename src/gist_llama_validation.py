@@ -226,7 +226,7 @@ def generate_hint_for_item(
         reflection_response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": reflection_prompt}],
-            max_tokens=512,
+            max_completion_tokens=512,
         )
         reflection_text = reflection_response.choices[0].message.content.strip()
 
@@ -238,7 +238,7 @@ def generate_hint_for_item(
         behavior_response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": behavior_prompt}],
-            max_tokens=512,
+            max_completion_tokens=512,
         )
         behavior_text = behavior_response.choices[0].message.content.strip()
 
