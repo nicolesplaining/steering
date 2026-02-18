@@ -613,7 +613,8 @@ def phase_hints(
         }
         hinted.append(item_with_hint)
         status = "ok" if not hint_result.get("error") else "ERROR"
-        print(f"  [{i+1}/{len(wrong)}] {status}")
+        snippet = hint_text[:150].replace("\n", " ") if hint_text else "(empty)"
+        print(f"  [{i+1}/{len(wrong)}] {status} | {snippet}...")
         if (i + 1) % 10 == 0 or i == len(wrong) - 1:
             with open(save_path, "w") as f:
                 json.dump({"phase": "hints", "results": hinted}, f, indent=2)
