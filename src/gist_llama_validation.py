@@ -82,53 +82,54 @@ def extract_ground_truth(solution: str) -> str:
     return ""
 
 
-def normalize_answer(s: str) -> str:
-    s = s.strip().lower()
-    s = re.sub(r"\\text\{([^}]*)\}", r"\1", s)
-    s = s.replace(" ", "").replace(",", "")
-    return s
+LLM_JUDGE_PROMPT = """Given a math problem and a model's response, determine if the model arrived at the correct answer.
+
+Problem: {problem}
+Correct answer: {ground_truth}
+Model response: {response}
+
+Does the model's response contain the correct final answer? The answer might be expressed differently (e.g. as a fraction vs decimal, with different formatting, or embedded in a sentence) but must be mathematically equivalent.
+
+Reply with ONLY "correct" or "incorrect"."""
+
+_judge_client = None
 
 
-def is_correct(predicted: str, ground_truth: str) -> Tuple[bool, Dict]:
-    debug: Dict[str, Any] = {
-        "pred_raw": predicted,
-        "gt_raw": ground_truth,
-        "match_type": None,
-    }
-    if not predicted:
-        debug["match_type"] = "empty_prediction"
+def _get_judge_client() -> Any:
+    global _judge_client
+    if _judge_client is None:
+        from openai import OpenAI
+        _judge_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _judge_client
+
+
+def llm_judge(
+    problem: str, ground_truth: str, response: str, judge_model: str = "gpt-5-mini"
+) -> Tuple[bool, Dict]:
+    """Use an LLM to judge whether the response is correct."""
+    debug: Dict[str, Any] = {"match_type": "llm_judge", "judge_model": judge_model}
+    if not response or not response.strip():
+        debug["match_type"] = "empty_response"
         return False, debug
-    if not ground_truth:
-        debug["match_type"] = "empty_ground_truth"
+    try:
+        client = _get_judge_client()
+        prompt = LLM_JUDGE_PROMPT.format(
+            problem=problem, ground_truth=ground_truth, response=response[:2000]
+        )
+        resp = client.chat.completions.create(
+            model=judge_model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=8,
+            temperature=0,
+        )
+        verdict = (resp.choices[0].message.content or "").strip().lower()
+        correct = verdict.startswith("correct")
+        debug["judge_verdict"] = verdict
+        return correct, debug
+    except Exception as exc:
+        debug["match_type"] = "judge_error"
+        debug["judge_error"] = str(exc)
         return False, debug
-    pred_clean = normalize_answer(predicted)
-    gt_clean = normalize_answer(ground_truth)
-    debug["pred_normalized"] = pred_clean
-    debug["gt_normalized"] = gt_clean
-    if pred_clean == gt_clean:
-        debug["match_type"] = "exact_string"
-        return True, debug
-    if HAS_SYMPY:
-        try:
-            pred_sym = latex2sympy(predicted)
-            gt_sym = latex2sympy(ground_truth)
-            pred_val = float(N(pred_sym))
-            gt_val = float(N(gt_sym))
-            if abs(pred_val - gt_val) < 1e-6:
-                debug["match_type"] = "numeric_sympy"
-                return True, debug
-        except Exception:
-            pass
-        try:
-            pred_sym = latex2sympy(predicted)
-            gt_sym = latex2sympy(ground_truth)
-            if simplify(pred_sym - gt_sym) == 0:
-                debug["match_type"] = "symbolic_equiv"
-                return True, debug
-        except Exception:
-            pass
-    debug["match_type"] = "no_match"
-    return False, debug
 
 
 # ============================================================================
@@ -490,28 +491,57 @@ def generate_with_gist(
 # ============================================================================
 
 
-def load_math_problems(n_problems: int, seed: int) -> List[Dict[str, Any]]:
-    """Load and sample problems from OpenThoughts-114k-math."""
-    print("Loading open-r1/OpenThoughts-114k-math...")
-    ds = load_dataset("open-r1/OpenThoughts-114k-math", split="train")
-    print(f"Total examples: {len(ds)}")
+def _extract_gsm8k_answer(answer_field: str) -> str:
+    """Extract numeric answer after #### in GSM8K format."""
+    match = re.search(r"####\s*(.+?)\s*$", answer_field)
+    return match.group(1).strip() if match else ""
 
+
+def load_math_problems(
+    n_problems: int, seed: int, dataset: str = "openthoughts"
+) -> List[Dict[str, Any]]:
+    """Load and sample problems from the specified dataset."""
     rng = random.Random(seed)
-    indices = rng.sample(range(len(ds)), min(n_problems, len(ds)))
-    problems = []
-    for idx in indices:
-        row = ds[idx]
-        gt = extract_ground_truth(row.get("solution", ""))
-        if not gt:
-            continue
-        problems.append(
-            {
-                "idx": idx,
-                "problem": row["problem"],
-                "solution": row.get("solution", ""),
-                "ground_truth": gt,
-            }
-        )
+
+    if dataset == "gsm8k":
+        print("Loading openai/gsm8k (test split)...")
+        ds = load_dataset("openai/gsm8k", "main", split="test")
+        print(f"Total examples: {len(ds)}")
+        indices = rng.sample(range(len(ds)), min(n_problems, len(ds)))
+        problems = []
+        for idx in indices:
+            row = ds[idx]
+            gt = _extract_gsm8k_answer(row.get("answer", ""))
+            if not gt:
+                continue
+            problems.append(
+                {
+                    "idx": idx,
+                    "problem": row["question"],
+                    "solution": row.get("answer", ""),
+                    "ground_truth": gt,
+                }
+            )
+    else:
+        print("Loading open-r1/OpenThoughts-114k-math...")
+        ds = load_dataset("open-r1/OpenThoughts-114k-math", split="train")
+        print(f"Total examples: {len(ds)}")
+        indices = rng.sample(range(len(ds)), min(n_problems, len(ds)))
+        problems = []
+        for idx in indices:
+            row = ds[idx]
+            gt = extract_ground_truth(row.get("solution", ""))
+            if not gt:
+                continue
+            problems.append(
+                {
+                    "idx": idx,
+                    "problem": row["problem"],
+                    "solution": row.get("solution", ""),
+                    "ground_truth": gt,
+                }
+            )
+
     print(f"Sampled {len(problems)} problems with extractable ground truth")
     return problems
 
@@ -530,27 +560,23 @@ def phase_baseline(
 
     results = []
     n_correct = 0
-    n_empty = 0
     for i, prob in enumerate(problems):
         response = generate_no_hint(model, tokenizer, prob["problem"], max_new_tokens)
-        predicted = extract_boxed_answer(response)
-        if not predicted:
-            n_empty += 1
-        correct, debug = is_correct(predicted, prob["ground_truth"])
+        correct, debug = llm_judge(prob["problem"], prob["ground_truth"], response)
         if correct:
             n_correct += 1
         item = {
             **prob,
             "response": response,
-            "predicted": predicted,
             "correct": correct,
             "match_type": debug.get("match_type", ""),
         }
         results.append(item)
+        response_snip = response[:100].replace("\n", " ") if response else "(empty)"
         if (i + 1) % 10 == 0 or i == len(problems) - 1:
             print(
                 f"  [{i+1}/{len(problems)}] correct={n_correct}, "
-                f"wrong={i+1-n_correct}, empty={n_empty}"
+                f"wrong={i+1-n_correct}"
             )
             # Periodic checkpoint
             with open(save_path, "w") as f:
@@ -559,12 +585,6 @@ def phase_baseline(
                      "partial": i + 1 < len(problems)},
                     f, indent=2,
                 )
-
-    if n_empty > len(problems) * 0.5:
-        print(
-            f"WARNING: {n_empty}/{len(problems)} responses had no \\boxed{{}} answer. "
-            f"Consider increasing --max-new-tokens."
-        )
 
     wrong = [r for r in results if not r["correct"]]
     print(f"\nBaseline: {n_correct}/{len(problems)} correct, {len(wrong)} wrong")
@@ -641,19 +661,14 @@ def phase_full_hint(
 
     improved = []
     all_results = []
-    n_empty = 0
     for i, item in enumerate(valid):
         response = generate_with_hint(
             model, tokenizer, item["problem"], item["behaviors_block"], max_new_tokens
         )
-        predicted = extract_boxed_answer(response)
-        if not predicted:
-            n_empty += 1
-        correct, debug = is_correct(predicted, item["ground_truth"])
+        correct, debug = llm_judge(item["problem"], item["ground_truth"], response)
         item_result = {
             **item,
             "full_hint_response": response,
-            "full_hint_predicted": predicted,
             "full_hint_correct": correct,
             "full_hint_match_type": debug.get("match_type", ""),
         }
@@ -661,14 +676,14 @@ def phase_full_hint(
         if correct:
             improved.append(item_result)
         status = "✓" if correct else "✗"
-        print(f"\n  [{i+1}/{len(valid)}] {status} pred={predicted!r} | gt={item['ground_truth']!r}")
+        print(f"\n  [{i+1}/{len(valid)}] {status} | gt={item['ground_truth']!r}")
         print(f"  HINT:     {item['behaviors_block'][:200].replace(chr(10), ' ')}...")
         print(f"  RESPONSE: {response[:400] if response else '(empty)'}")
         print(f"  {'─'*60}")
 
     print(
         f"\nFull hint: {len(improved)}/{len(valid)} improved "
-        f"(need {target_improved}) | {n_empty} empty responses"
+        f"(need {target_improved})"
     )
     if len(improved) < target_improved:
         print(
@@ -684,7 +699,6 @@ def phase_full_hint(
                 "all_results": all_results,
                 "n_improved": len(improved),
                 "n_evaluated": len(valid),
-                "n_empty": n_empty,
             },
             f,
             indent=2,
@@ -713,7 +727,6 @@ def phase_gist_eval(
     print(f"Evaluating {len(eval_set)} problems with gisted hints...")
 
     n_correct = 0
-    n_empty = 0
     results = []
     for i, item in enumerate(eval_set):
         response = generate_with_gist(
@@ -725,33 +738,19 @@ def phase_gist_eval(
             num_gist_tokens=num_gist_tokens,
             max_new_tokens=max_new_tokens,
         )
-        predicted = extract_boxed_answer(response)
-        if not predicted:
-            n_empty += 1
-        correct, debug = is_correct(predicted, item["ground_truth"])
+        correct, debug = llm_judge(item["problem"], item["ground_truth"], response)
         if correct:
             n_correct += 1
 
         item_result = {
             **item,
             "gist_response": response,
-            "gist_predicted": predicted,
             "gist_correct": correct,
             "gist_match_type": debug.get("match_type", ""),
         }
         results.append(item_result)
         if (i + 1) % 5 == 0 or i == len(eval_set) - 1:
-            print(f"  [{i+1}/{len(eval_set)}] gist correct: {n_correct}, empty: {n_empty}")
-
-    if n_empty > 0:
-        print(
-            f"\nWARNING: {n_empty}/{len(eval_set)} gisted responses had no \\boxed{{}} answer."
-        )
-        if n_empty > len(eval_set) * 0.5:
-            print(
-                "  High empty rate may indicate gist compression is producing "
-                "gibberish or the model cannot follow the compressed instruction."
-            )
+            print(f"  [{i+1}/{len(eval_set)}] gist correct: {n_correct}")
 
     # Final summary
     n_eval = len(eval_set)
@@ -829,6 +828,13 @@ def _parse_args() -> argparse.Namespace:
         default="all",
         choices=["baseline", "hints", "full_hint", "gist_eval", "all"],
         help="Which phase to run",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="gsm8k",
+        choices=["gsm8k", "openthoughts"],
+        help="Dataset to use (gsm8k for grade-school math, openthoughts for competition math)",
     )
     parser.add_argument(
         "--n-problems",
@@ -918,7 +924,7 @@ def main():
     # ── Phase 1: Baseline ──
     baseline_results = None
     if run_all or args.phase == "baseline":
-        problems = load_math_problems(args.n_problems, args.seed)
+        problems = load_math_problems(args.n_problems, args.seed, dataset=args.dataset)
         baseline_results = phase_baseline(
             model, tokenizer, problems, baseline_path, args.max_new_tokens
         )
